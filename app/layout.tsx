@@ -16,6 +16,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <meta name="google-adsense-account" content="ca-pub-3558900564632115"></meta>
       <meta name="google-site-verification" content="3Rki2vSPK39LR6h_QEZh9t96z4Z4ZVV06PZiYW_6kiY" />
       <body>
 
@@ -33,7 +34,11 @@ export default function RootLayout({
             gtag('config', 'G-YYVPXWZLF8');
           `}
         </Script>
-        
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-300">
+          Readora được duy trì bằng quảng cáo để giữ web hoạt động miễn phí.
+          Nếu quảng cáo hữu ích với bạn, hãy cân nhắc ủng hộ bằng cách tương tác với chúng. Cảm ơn bạn ❤️
+          Ads help keep Readora free and running for everyone ❤️
+        </div>
         {children}
 
         <div className="mt-6 text-center text-sm text-zinc-500">
