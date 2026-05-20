@@ -39,6 +39,26 @@ export default function RootLayout({
           Nếu quảng cáo hữu ích với bạn, hãy cân nhắc ủng hộ bằng cách tương tác với chúng. Cảm ơn bạn ❤️
           Ads help keep Readora free and running for everyone ❤️
         </div>
+
+        <div className="max-w-md rounded-3xl border border-zinc-800 bg-zinc-950 p-6 text-white shadow-2xl">
+          <h2 className="mb-3 text-xl font-bold">
+            Keep Readora Alive ❤️
+          </h2>
+
+          <p className="mb-4 text-sm leading-7 text-zinc-300">
+            Readora is maintained entirely by ads and community
+            support to keep the tool free for everyone.
+          </p>
+
+          <p className="mb-6 text-sm leading-7 text-zinc-400">
+            If you enjoy using Readora, supporting the project
+            through ads or donations helps a lot.
+          </p>
+
+          <button className="w-full rounded-2xl bg-white px-4 py-3 font-semibold text-black">
+            Continue
+          </button>
+        </div>
         {children}
 
         <div className="mt-6 text-center text-sm text-zinc-500">
