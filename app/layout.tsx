@@ -35,6 +35,20 @@ export default function RootLayout({
         </Script>
         
         {children}
+
+        <footer className="mt-16 pb-8 text-center text-sm text-zinc-500">
+          <p>© 2026 Readora</p>
+
+          <div className="mt-2 flex justify-center gap-4">
+            <a href="mailto:tranthanhnguyenviet@gmail.com">
+              Contact
+            </a>
+
+            <a href="/privacy">
+              Privacy
+            </a>
+          </div>
+        </footer>
       </body>
     </html>
   )
