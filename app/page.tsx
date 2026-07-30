@@ -372,7 +372,7 @@ export default function HomePage() {
                   <div className="flex flex-col gap-3 sm:flex-row">
                     <input
                       type="url"
-                      placeholder="Nhập URL từ Webtoon, BookWalker, Manga Plus hoặc MangaDex"
+                      placeholder="Nhập URL từ Webtoon hoặc MangaDex"
                       value={mangaUrl}
                       onChange={(e) => setMangaUrl(e.target.value)}
                       className={`flex-1 rounded-xl border px-4 py-2 text-sm outline-none ${
@@ -397,7 +397,7 @@ export default function HomePage() {
                   <p className={`mt-2 text-xs ${
                     theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'
                   }`}>
-                    Hỗ trợ link từ Webtoon, BookWalker, Manga Plus và MangaDex
+                    Hiện chỉ hỗ trợ link từ Webtoon và MangaDex
                   </p>
                 </div>
 
