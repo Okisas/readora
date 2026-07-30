@@ -30,36 +30,39 @@ type UploadPanelProps = {
 }
 
 const sourceLanguageOptions = [
-  { value: 'eng', label: 'English' },
-  {
-    value: 'manga_vert',
-    label: 'Manga Vertical',
-    disabled: true,
-  },
+  { value: 'eng', label: 'Tiếng Anh' },
   {
     value: 'jpn',
-    label: 'Japanese',
-    disabled: true,
+    label: 'Tiếng Nhật',
   },
   {
     value: 'kor',
-    label: 'Korean',
-    disabled: true,
+    label: 'Tiếng Hàn',
   },
   {
     value: 'chi_sim',
-    label: 'Chinese',
-    disabled: true,
+    label: 'Tiếng Trung',
   },
+  { value: 'spa', label: 'Tiếng Tây Ban Nha' },
+  { value: 'fra', label: 'Tiếng Pháp' },
+  { value: 'deu', label: 'Tiếng Đức' },
+  { value: 'ita', label: 'Tiếng Ý' },
+  { value: 'por', label: 'Tiếng Bồ Đào Nha' },
+  { value: 'rus', label: 'Tiếng Nga' },
 ]
 
 const targetLanguageOptions = [
-  { value: 'vi', label: 'Vietnamese' },
+  { value: 'vi', label: 'Tiếng Việt' },
   {
     value: 'en',
-    label: 'English',
-    disabled: true,
+    label: 'Tiếng Anh',
   },
+  { value: 'es', label: 'Tiếng Tây Ban Nha' },
+  { value: 'fr', label: 'Tiếng Pháp' },
+  { value: 'de', label: 'Tiếng Đức' },
+  { value: 'it', label: 'Tiếng Ý' },
+  { value: 'pt', label: 'Tiếng Bồ Đào Nha' },
+  { value: 'ru', label: 'Tiếng Nga' },
 ]
 
 export default function UploadPanel({
@@ -110,7 +113,7 @@ export default function UploadPanel({
         <Upload className="mb-4 h-10 w-10 sm:h-12 sm:w-12" />
 
         <div className="mb-2 text-base font-semibold sm:text-lg">
-          Upload Images
+          Tải ảnh lên
         </div>
 
         <div
@@ -120,8 +123,8 @@ export default function UploadPanel({
               : 'text-zinc-500'
           }`}
         >
-          Tap to choose images or drag multiple manga pages
-          here. Supports PNG, JPG, and WEBP.
+          Nhấn để chọn ảnh hoặc kéo thả nhiều trang truyện vào đây.
+          Hỗ trợ PNG, JPG và WEBP.
         </div>
 
         <input
@@ -136,7 +139,7 @@ export default function UploadPanel({
       <div className="mt-6 space-y-4">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
           <LanguageSelector
-            label="Source Language"
+            label="Ngôn ngữ gốc"
             value={sourceLanguage}
             options={sourceLanguageOptions}
             theme={theme}
@@ -144,7 +147,7 @@ export default function UploadPanel({
           />
 
           <LanguageSelector
-            label="Translate To"
+            label="Dịch sang"
             value={targetLanguage}
             options={targetLanguageOptions}
             theme={theme}
@@ -159,9 +162,9 @@ export default function UploadPanel({
               : 'border-zinc-200 bg-zinc-50 text-zinc-700'
           }`}
         >
-          Click the image to open a scan box. Drag the frame to
-          move it, drag the corners or edges to resize it, then
-          press Scan to run OCR and translate the selected area.
+          Hãy kéo vùng quét bao phủ toàn bộ khung văn bản cần dịch,
+          bao gồm cả phần chữ ở sát mép. Có thể kéo khung để di chuyển
+          hoặc kéo các góc/cạnh để điều chỉnh, sau đó nhấn “Quét”.
         </div>
 
         {statusMessage && (
@@ -186,9 +189,10 @@ export default function UploadPanel({
                 : 'border-zinc-300 bg-zinc-100 text-zinc-900 hover:bg-zinc-200'
             }`}
           >
-            Merge images in current order
+            Ghép ảnh theo thứ tự hiện tại
           </button>
         )}
+
       </div>
 
       <PageThumbnails

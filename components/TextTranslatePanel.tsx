@@ -14,37 +14,49 @@ type TextTranslatePanelProps = {
 }
 
 const sourceLanguageOptions = [
-  { value: 'eng', label: 'English' },
+  { value: 'eng', label: 'Tiếng Anh' },
   {
     value: 'jpn',
-    label: 'Japanese',
+    label: 'Tiếng Nhật',
   },
   {
     value: 'kor',
-    label: 'Korean',
+    label: 'Tiếng Hàn',
   },
   {
     value: 'chi_sim',
-    label: 'Chinese',
+    label: 'Tiếng Trung',
   },
-  { value: 'vi', label: 'Vietnamese' },
+  { value: 'spa', label: 'Tiếng Tây Ban Nha' },
+  { value: 'fra', label: 'Tiếng Pháp' },
+  { value: 'deu', label: 'Tiếng Đức' },
+  { value: 'ita', label: 'Tiếng Ý' },
+  { value: 'por', label: 'Tiếng Bồ Đào Nha' },
+  { value: 'rus', label: 'Tiếng Nga' },
+  { value: 'vi', label: 'Tiếng Việt' },
 ]
 
 const targetLanguageOptions = [
-  { value: 'en', label: 'English' },
-  { value: 'ja', label: 'Japanese' },
-  { value: 'ko', label: 'Korean' },
-  { value: 'zh-CN', label: 'Chinese' },
-  { value: 'vi', label: 'Vietnamese' },
+  { value: 'en', label: 'Tiếng Anh' },
+  { value: 'ja', label: 'Tiếng Nhật' },
+  { value: 'ko', label: 'Tiếng Hàn' },
+  { value: 'zh-CN', label: 'Tiếng Trung' },
+  { value: 'es', label: 'Tiếng Tây Ban Nha' },
+  { value: 'fr', label: 'Tiếng Pháp' },
+  { value: 'de', label: 'Tiếng Đức' },
+  { value: 'it', label: 'Tiếng Ý' },
+  { value: 'pt', label: 'Tiếng Bồ Đào Nha' },
+  { value: 'ru', label: 'Tiếng Nga' },
+  { value: 'vi', label: 'Tiếng Việt' },
 ]
 
 export default function TextTranslatePanel({
-  inputText,
-  outputText,
-  isTranslating,
-  sourceLanguage,
-  targetLanguage,
-  theme,
+  inputText = '',
+  outputText = '',
+  isTranslating = false,
+  sourceLanguage = 'eng',
+  targetLanguage = 'vi',
+  theme = 'dark',
   onInputChange,
   onSourceLanguageChange,
   onTargetLanguageChange,
@@ -62,7 +74,7 @@ export default function TextTranslatePanel({
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
             <LanguageSelector
-              label="Source Language"
+              label="Ngôn ngữ gốc"
               value={sourceLanguage}
               options={sourceLanguageOptions}
               theme={theme}
@@ -70,7 +82,7 @@ export default function TextTranslatePanel({
             />
 
             <LanguageSelector
-              label="Translate To"
+              label="Dịch sang"
               value={targetLanguage}
               options={targetLanguageOptions}
               theme={theme}
@@ -82,7 +94,7 @@ export default function TextTranslatePanel({
             type="button"
             onClick={onTranslate}
             disabled={
-              isTranslating || !inputText.trim()
+              isTranslating || !inputText || !inputText.trim()
             }
             className={`w-full rounded-2xl px-4 py-3 text-sm font-semibold disabled:opacity-50 ${
               theme === 'dark'
@@ -91,8 +103,8 @@ export default function TextTranslatePanel({
             }`}
           >
             {isTranslating
-              ? 'Translating...'
-              : 'Translate Text'}
+              ? 'Đang dịch...'
+              : 'Dịch văn bản'}
           </button>
         </div>
       </div>
@@ -106,7 +118,7 @@ export default function TextTranslatePanel({
           }`}
         >
           <h2 className="mb-4 text-xl font-bold">
-            Input Text
+            Văn bản cần dịch
           </h2>
 
           <textarea
@@ -114,7 +126,7 @@ export default function TextTranslatePanel({
             onChange={(e) =>
               onInputChange(e.target.value)
             }
-            placeholder="Enter text to translate..."
+            placeholder="Nhập văn bản cần dịch..."
             className={`min-h-[220px] w-full resize-y rounded-2xl border p-4 outline-none sm:min-h-[260px] ${
               theme === 'dark'
                 ? 'border-zinc-800 bg-black/40 text-zinc-200 placeholder:text-zinc-500'
@@ -131,7 +143,7 @@ export default function TextTranslatePanel({
           }`}
         >
           <h2 className="mb-4 text-xl font-bold">
-            Translation
+            Bản dịch
           </h2>
 
           <div
@@ -142,7 +154,7 @@ export default function TextTranslatePanel({
             }`}
           >
             {outputText ||
-              'Translation will appear here.'}
+              'Bản dịch sẽ xuất hiện ở đây.'}
           </div>
         </div>
       </div>

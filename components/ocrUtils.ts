@@ -1,3 +1,4 @@
+// components/ocrUtils.ts
 import Tesseract from "tesseract.js";
 import type {
   InkBounds,
@@ -5,6 +6,31 @@ import type {
   OCRCandidate,
   OCRLine,
 } from "@/components/types";
+
+// Reuse the OCR worker between requests. Tesseract.recognize() creates and
+// downloads a new worker/language model every time, which makes the automatic
+// translation button appear to hang on the first page and stay slow afterwards.
+type OCRWorker = Awaited<ReturnType<typeof Tesseract.createWorker>>;
+const ocrWorkers = new Map<string, Promise<OCRWorker>>();
+
+const getOCRWorker = (language: string) => {
+  const cachedWorker = ocrWorkers.get(language);
+  if (cachedWorker) return cachedWorker;
+
+  const workerPromise = Tesseract.createWorker(language, 1, {
+    logger: (message) => {
+      if (message.status === "recognizing text") {
+        console.log(`OCR: ${Math.round(message.progress * 100)}%`);
+      }
+    },
+  }).catch((error) => {
+    ocrWorkers.delete(language);
+    throw error;
+  });
+
+  ocrWorkers.set(language, workerPromise);
+  return workerPromise;
+};
 
 export const preprocessCanvas = (sourceCanvas: HTMLCanvasElement) => {
   const processedCanvas = document.createElement("canvas");
@@ -488,7 +514,6 @@ export const chooseBestCandidate = (
     : bestCjkCandidate;
 };
 
-// === THÊM ĐOẠN NÀY VÀO CUỐI FILE ocrUtils.ts ===
 export const preprocessForFullPageManga = (
   sourceCanvas: HTMLCanvasElement,
 ): HTMLCanvasElement => {
@@ -562,9 +587,7 @@ const colorDistance = (
   b2: number,
 ) =>
   Math.sqrt(
-    (r1 - r2) * (r1 - r2) +
-      (g1 - g2) * (g1 - g2) +
-      (b1 - b2) * (b1 - b2),
+    (r1 - r2) * (r1 - r2) + (g1 - g2) * (g1 - g2) + (b1 - b2) * (b1 - b2),
   );
 
 export const removeBackgroundFromCanvas = (
@@ -597,11 +620,7 @@ export const removeBackgroundFromCanvas = (
 
   const pushSampleColor = (x: number, y: number) => {
     const index = (y * width + x) * 4;
-    borderPixels.push([
-      data[index],
-      data[index + 1],
-      data[index + 2],
-    ]);
+    borderPixels.push([data[index], data[index + 1], data[index + 2]]);
   };
 
   const sampleRadius = Math.max(
@@ -612,10 +631,7 @@ export const removeBackgroundFromCanvas = (
   const pushCornerBlock = (startX: number, startY: number) => {
     for (let y = startY; y < startY + sampleRadius; y += 1) {
       for (let x = startX; x < startX + sampleRadius; x += 1) {
-        pushSampleColor(
-          Math.min(width - 1, x),
-          Math.min(height - 1, y),
-        );
+        pushSampleColor(Math.min(width - 1, x), Math.min(height - 1, y));
       }
     }
   };
@@ -657,9 +673,7 @@ export const removeBackgroundFromCanvas = (
       const delta = value - backgroundDistanceMean;
       return sum + delta * delta;
     }, 0) / count;
-  const backgroundDistanceStd = Math.sqrt(
-    backgroundDistanceVariance,
-  );
+  const backgroundDistanceStd = Math.sqrt(backgroundDistanceVariance);
   const hardThreshold = Math.max(
     18,
     Math.min(
@@ -672,11 +686,7 @@ export const removeBackgroundFromCanvas = (
   const softThreshold = Math.min(
     112,
     hardThreshold +
-      Math.max(
-        8,
-        backgroundDistanceStd *
-          (0.45 + normalizedStrength * 0.75),
-      ) +
+      Math.max(8, backgroundDistanceStd * (0.45 + normalizedStrength * 0.75)) +
       normalizedStrength * 8,
   );
 
@@ -697,18 +707,15 @@ export const removeBackgroundFromCanvas = (
       backgroundG,
       backgroundB,
     );
-    const saturation =
-      Math.max(r, g, b) - Math.min(r, g, b);
+    const saturation = Math.max(r, g, b) - Math.min(r, g, b);
 
     if (distance <= hardThreshold) {
       return true;
     }
 
     return (
-      brightness >
-        248 - normalizedStrength * 12 &&
-      saturation <
-        20 + normalizedStrength * 18 &&
+      brightness > 248 - normalizedStrength * 12 &&
+      saturation < 20 + normalizedStrength * 18 &&
       distance <= softThreshold
     );
   };
@@ -771,8 +778,7 @@ export const removeBackgroundFromCanvas = (
       backgroundG,
       backgroundB,
     );
-    const brightness =
-      (data[i] + data[i + 1] + data[i + 2]) / 3;
+    const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
     const saturation =
       Math.max(data[i], data[i + 1], data[i + 2]) -
       Math.min(data[i], data[i + 1], data[i + 2]);
@@ -784,24 +790,16 @@ export const removeBackgroundFromCanvas = (
 
     if (
       distance < softThreshold &&
-      brightness >
-        238 - normalizedStrength * 18 &&
-      saturation <
-        24 + normalizedStrength * 26
+      brightness > 238 - normalizedStrength * 18 &&
+      saturation < 24 + normalizedStrength * 26
     ) {
       const fadeRatio =
-        (distance - hardThreshold) /
-        Math.max(1, softThreshold - hardThreshold);
-      data[i + 3] = Math.round(
-        Math.max(0, Math.min(255, 255 * fadeRatio)),
-      );
+        (distance - hardThreshold) / Math.max(1, softThreshold - hardThreshold);
+      data[i + 3] = Math.round(Math.max(0, Math.min(255, 255 * fadeRatio)));
     } else if (
-      brightness >
-        248 - normalizedStrength * 12 &&
-      saturation <
-        18 + normalizedStrength * 16 &&
-      distance <
-        softThreshold + 4 + normalizedStrength * 10
+      brightness > 248 - normalizedStrength * 12 &&
+      saturation < 18 + normalizedStrength * 16 &&
+      distance < softThreshold + 4 + normalizedStrength * 10
     ) {
       data[i + 3] = Math.min(
         data[i + 3],
@@ -827,8 +825,7 @@ export const removeBackgroundFromCanvas = (
         for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
           if (offsetX === 0 && offsetY === 0) continue;
 
-          const neighborIndex =
-            ((y + offsetY) * width + (x + offsetX)) * 4;
+          const neighborIndex = ((y + offsetY) * width + (x + offsetX)) * 4;
 
           if (data[neighborIndex + 3] === 0) {
             transparentNeighbors += 1;
@@ -845,8 +842,7 @@ export const removeBackgroundFromCanvas = (
           Math.round(208 - normalizedStrength * 56),
         );
       } else if (
-        transparentNeighbors >=
-        Math.max(7, 8 - Math.round(normalizedStrength))
+        transparentNeighbors >= Math.max(7, 8 - Math.round(normalizedStrength))
       ) {
         resultData[pixelIndex + 3] = 0;
       }
@@ -856,4 +852,63 @@ export const removeBackgroundFromCanvas = (
   imageData.data.set(resultData);
   ctx.putImageData(imageData, 0, 0);
   return canvas;
+};
+
+// ===== HÀM EXTRACT TEXT WITH POSITIONS (SỬ DỤNG SYMBOLS) =====
+export const extractTextWithPositions = async (
+  imageUrl: string,
+  language: string = "eng",
+) => {
+  try {
+    const worker = await getOCRWorker(language);
+    const result = await worker.recognize(imageUrl);
+
+    const data = result.data;
+
+    // Lấy lines từ data
+    const lines = (data as any).lines || [];
+    const words = (data as any).words || [];
+
+    const lineData = lines.map((line: any) => ({
+      text: line.text || "",
+      confidence: line.confidence || 0,
+      bbox: {
+        x0: line.bbox?.x0 || 0,
+        y0: line.bbox?.y0 || 0,
+        x1: line.bbox?.x1 || 0,
+        y1: line.bbox?.y1 || 0,
+      },
+      width: (line.bbox?.x1 || 0) - (line.bbox?.x0 || 0),
+      height: (line.bbox?.y1 || 0) - (line.bbox?.y0 || 0),
+      words: (line.words || []).map((w: any) => w.text || ""),
+    }));
+
+    const wordData = words.map((word: any) => ({
+      text: word.text || "",
+      confidence: word.confidence || 0,
+      bbox: {
+        x0: word.bbox?.x0 || 0,
+        y0: word.bbox?.y0 || 0,
+        x1: word.bbox?.x1 || 0,
+        y1: word.bbox?.y1 || 0,
+      },
+      width: (word.bbox?.x1 || 0) - (word.bbox?.x0 || 0),
+      height: (word.bbox?.y1 || 0) - (word.bbox?.y0 || 0),
+    }));
+
+    const validLines = lineData.filter(
+      (line: any) => line.text.trim().length > 0,
+    );
+
+    return {
+      fullText: data.text || "",
+      lines: validLines,
+      words: wordData,
+      confidence: data.confidence || 0,
+      totalLines: validLines.length,
+    };
+  } catch (error) {
+    console.error("OCR Error:", error);
+    return null;
+  }
 };

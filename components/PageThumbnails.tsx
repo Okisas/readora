@@ -31,7 +31,7 @@ export default function PageThumbnails({
             : 'text-zinc-500'
         }`}
       >
-        <span>Uploaded Pages</span>
+        <span>Các trang đã tải</span>
         <span className="text-xs">{images.length} trang</span>
       </div>
 
@@ -68,25 +68,27 @@ export default function PageThumbnails({
                 onClick={() =>
                   onMovePage(index, 'left')
                 }
-                className={`h-7 w-7 rounded-full text-xs disabled:opacity-30 ${
+                aria-label="Đưa trang sang trái"
+                className={`rounded-full px-2 py-1 text-[11px] disabled:opacity-30 ${
                   theme === 'dark'
                     ? 'bg-black/55 text-white'
                     : 'border border-zinc-300 bg-white/90 text-zinc-900'
                 }`}
               >
-                {'<'}
+                Trước
               </button>
 
               <button
                 type="button"
                 onClick={() => onDeletePage(index)}
-                className={`h-7 w-7 rounded-full text-xs ${
+                aria-label="Xóa trang"
+                className={`rounded-full px-2 py-1 text-[11px] ${
                   theme === 'dark'
                     ? 'bg-black/55 text-white'
                     : 'border border-zinc-300 bg-white/90 text-zinc-900'
                 }`}
               >
-                x
+                Xóa
               </button>
 
               <button
@@ -97,13 +99,14 @@ export default function PageThumbnails({
                 onClick={() =>
                   onMovePage(index, 'right')
                 }
-                className={`h-7 w-7 rounded-full text-xs disabled:opacity-30 ${
+                aria-label="Đưa trang sang phải"
+                className={`rounded-full px-2 py-1 text-[11px] disabled:opacity-30 ${
                   theme === 'dark'
                     ? 'bg-black/55 text-white'
                     : 'border border-zinc-300 bg-white/90 text-zinc-900'
                 }`}
               >
-                {'>'}
+                Sau
               </button>
             </div>
 

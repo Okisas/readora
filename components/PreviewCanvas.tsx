@@ -151,7 +151,7 @@ export default function PreviewCanvas({
       {imagesLength === 0 ? (
         <div className="flex h-[280px] flex-col items-center justify-center text-center text-zinc-500 sm:h-[420px] lg:h-[700px]">
           <div className="mb-2 text-lg font-semibold">
-            Upload images to begin
+            Tải ảnh lên để bắt đầu
           </div>
         </div>
       ) : (
@@ -227,7 +227,7 @@ export default function PreviewCanvas({
 
                 <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center">
                   <div className="rounded-full border border-white/20 bg-black/65 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-white/90">
-                    Lens Scan
+                    Quét vùng chọn
                   </div>
                 </div>
 
@@ -238,7 +238,7 @@ export default function PreviewCanvas({
                     onClick={onClearSelection}
                     className="rounded-full border border-white/20 bg-black/80 px-4 py-2 text-xs font-semibold text-white backdrop-blur"
                   >
-                    Clear
+                    Bỏ chọn
                   </button>
                   <button
                     type="button"
@@ -246,7 +246,7 @@ export default function PreviewCanvas({
                     onClick={onScanSelection}
                     className="rounded-full border border-white/10 bg-white px-5 py-2 text-xs font-bold uppercase tracking-[0.18em] text-black shadow-[0_8px_24px_rgba(255,255,255,0.28)]"
                   >
-                    Scan
+                    Quét
                   </button>
                 </div>
               </div>
@@ -261,11 +261,7 @@ export default function PreviewCanvas({
             return (
               <div
                 key={overlay.id}
-                className={`absolute overflow-hidden rounded-lg shadow-lg backdrop-blur-sm ${
-                  theme === 'dark'
-                    ? 'border border-white/10 bg-black/65 text-white'
-                    : 'border border-zinc-200 bg-white/92 text-zinc-900'
-                }`}
+                className="absolute overflow-hidden rounded-[50%] bg-white text-zinc-950 shadow-sm"
                 style={style}
                 onClick={() =>
                   onOverlaySelect(overlay.id)
@@ -285,20 +281,20 @@ export default function PreviewCanvas({
                   onClick={() =>
                     onDeleteOverlay(overlay.id)
                   }
-                  className={`absolute right-1 top-1 z-10 h-6 w-6 rounded-full text-sm transition ${
+                  className={`absolute right-[15%] top-[20%] z-10 rounded-full px-2 py-1 text-[10px] font-semibold transition ${
                     theme === 'dark'
-                      ? 'bg-black/45 text-white'
-                      : 'border border-zinc-300 bg-white/90 text-zinc-900'
+                      ? 'bg-black/70 text-white'
+                      : 'bg-zinc-900/75 text-white'
                   } ${
                     hoveredOverlayId === overlay.id
                       ? 'opacity-100'
                       : 'opacity-0'
                   }`}
                 >
-                  x
+                  Xóa
                 </button>
 
-                <div className="flex h-full w-full items-center justify-center px-3 py-2 text-center font-semibold leading-tight">
+                <div className="flex h-full w-full items-center justify-center px-5 py-4 text-center font-semibold leading-[1.12]">
                   {overlay.translatedText}
                 </div>
               </div>
@@ -346,13 +342,13 @@ export default function PreviewCanvas({
                     ? 'border-white/10 bg-black/30 text-white placeholder:text-zinc-500'
                     : 'border-zinc-200 bg-zinc-50 text-zinc-900 placeholder:text-zinc-400'
                 }`}
-                placeholder="Edit the detected sentence before translating"
+                placeholder="Chỉnh sửa câu nhận diện trước khi dịch"
               />
 
               {activeOverlayId && (
                 <div className="mb-3">
                   <div className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                    Translation
+                    Bản dịch
                   </div>
                   <textarea
                     value={editorTranslation}
@@ -367,7 +363,7 @@ export default function PreviewCanvas({
                         ? 'border-white/10 bg-black/30 text-white placeholder:text-zinc-500'
                         : 'border-zinc-200 bg-zinc-50 text-zinc-900 placeholder:text-zinc-400'
                     }`}
-                    placeholder="Edit the translated text"
+                    placeholder="Chỉnh sửa bản dịch"
                   />
                 </div>
               )}
@@ -385,10 +381,10 @@ export default function PreviewCanvas({
                   }`}
                 >
                   {isUpdatingOverlay
-                    ? 'Translating...'
+                    ? 'Đang dịch...'
                     : activeOverlayId
-                    ? 'Retranslate'
-                    : 'Translate'}
+                    ? 'Dịch lại'
+                    : 'Dịch'}
                 </button>
 
                 {activeOverlayId && (

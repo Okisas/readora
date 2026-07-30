@@ -123,6 +123,9 @@ export default function useMangaTranslator() {
   const interactionRef = useRef<PointerInteraction | null>(null);
   const generatedImageCountRef = useRef(0);
 
+  // State cho fetch manga từ URL
+  const [isFetchingManga, setIsFetchingManga] = useState(false);
+
   const [overlaysByImage, setOverlaysByImage] = useState<
     Record<string, TranslationOverlay[]>
   >(() => {
@@ -276,8 +279,18 @@ export default function useMangaTranslator() {
   const loadImageElement = (url: string) =>
     new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+      const timeout = setTimeout(() => {
+        reject(new Error(`Timeout loading image`));
+      }, 30000);
+      img.onload = () => {
+        clearTimeout(timeout);
+        resolve(img);
+      };
+      img.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error(`Failed to load image`));
+      };
+      img.crossOrigin = "anonymous"; // Thêm dòng này để xử lý CORS
       img.src = url;
     });
 
@@ -292,18 +305,37 @@ export default function useMangaTranslator() {
         jpn: "ja",
         kor: "ko",
         chi_sim: "zh-CN",
+        spa: "es",
+        fra: "fr",
+        deu: "de",
+        ita: "it",
+        por: "pt",
+        rus: "ru",
         vi: "vi",
         manga_vert: "ja",
       };
 
-      const response = await fetch(
-        "https://translate.googleapis.com/translate_a/single?client=gtx&sl=" +
-          (source ? (sourceMap[source] ?? "auto") : "auto") +
-          "&tl=" +
-          target +
-          "&dt=t&q=" +
-          encodeURIComponent(text),
-      );
+      const controller = new AbortController();
+      const timeout = window.setTimeout(() => controller.abort(), 12000);
+      let response: Response;
+
+      try {
+        response = await fetch(
+          "https://translate.googleapis.com/translate_a/single?client=gtx&sl=" +
+            (source ? (sourceMap[source] ?? "auto") : "auto") +
+            "&tl=" +
+            target +
+            "&dt=t&q=" +
+            encodeURIComponent(text),
+          { signal: controller.signal },
+        );
+      } finally {
+        window.clearTimeout(timeout);
+      }
+
+      if (!response.ok) {
+        throw new Error(`Translation request failed (${response.status})`);
+      }
 
       const data = (await response.json()) as GoogleTranslateResponse;
 
@@ -1108,62 +1140,150 @@ export default function useMangaTranslator() {
   };
 
   const mergeImages = async () => {
-    if (images.length < 2) return;
+    if (images.length < 2) {
+      setOcrText("Cần ít nhất 2 ảnh để ghép.");
+      return;
+    }
 
     try {
       setIsProcessing(true);
+      setOcrText("Đang sắp xếp và ghép ảnh...");
 
-      const loadedImages = await Promise.all(
-        images.map((image) => loadImageElement(image.url)),
-      );
+      // ===== SẮP XẾP ẢNH THEO ĐÚNG THỨ TỰ =====
+      const sortedImages = [...images].sort((a, b) => {
+        // Lấy số thứ tự từ id (ưu tiên số cuối cùng)
+        const getNumber = (str: string) => {
+          const matches = str.match(/(\d+)/g);
+          if (matches && matches.length > 0) {
+            return parseInt(matches[matches.length - 1]);
+          }
+          return 0;
+        };
 
-      const mergedWidth = Math.max(...loadedImages.map((image) => image.width));
-      const mergedHeight = loadedImages.reduce(
-        (total, image) => total + image.height,
-        0,
-      );
+        const numA = getNumber(a.id);
+        const numB = getNumber(b.id);
 
-      const mergedCanvas = document.createElement("canvas");
-      mergedCanvas.width = mergedWidth;
-      mergedCanvas.height = mergedHeight;
+        // So sánh số
+        if (numA !== numB) {
+          return numA - numB;
+        }
 
-      const ctx = mergedCanvas.getContext("2d");
-
-      if (!ctx) return;
-
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, mergedWidth, mergedHeight);
-
-      let offsetY = 0;
-
-      for (const image of loadedImages) {
-        ctx.drawImage(image, 0, offsetY);
-        offsetY += image.height;
-      }
-
-      const mergedBlob = await new Promise<Blob | null>((resolve) => {
-        mergedCanvas.toBlob(resolve, "image/png");
+        // Fallback: so sánh theo index trong mảng gốc
+        return images.indexOf(a) - images.indexOf(b);
       });
 
-      if (!mergedBlob) return;
+      // Log để debug
+      console.log("Thứ tự ảnh sau khi sắp xếp:");
+      sortedImages.forEach((img, i) => {
+        console.log(`${i + 1}: ${img.id}`);
+      });
 
-      const mergedImage: UploadedImage = {
-        id: [
-          "merged",
-          Date.now(),
-          images.map((image) => image.id).join("__"),
-        ].join("__"),
-        url: URL.createObjectURL(mergedBlob),
-      };
+      // ===== GHÉP TỪNG BATCH =====
+      const BATCH_SIZE = 25;
+      const imageBatches = [];
+      for (let i = 0; i < sortedImages.length; i += BATCH_SIZE) {
+        imageBatches.push(sortedImages.slice(i, i + BATCH_SIZE));
+      }
 
-      const nextImages = [...images, mergedImage];
-      setImages(nextImages);
-      setCurrentIndex(nextImages.length - 1);
-      drawImage(mergedImage.url);
-      setOcrText("Merged image created from the current Uploaded Pages order.");
+      const mergedImages: UploadedImage[] = [];
+
+      for (let batchIndex = 0; batchIndex < imageBatches.length; batchIndex++) {
+        const batch = imageBatches[batchIndex];
+        const startPage = batchIndex * BATCH_SIZE + 1;
+        const endPage = Math.min(
+          (batchIndex + 1) * BATCH_SIZE,
+          sortedImages.length,
+        );
+
+        setOcrText(
+          `Đang ghép trang ${startPage} → ${endPage} (batch ${batchIndex + 1}/${imageBatches.length})...`,
+        );
+
+        // Tải ảnh trong batch (giữ đúng thứ tự)
+        const loadedImages: HTMLImageElement[] = [];
+        for (const image of batch) {
+          try {
+            const img = await loadImageElement(image.url);
+            loadedImages.push(img);
+          } catch (err) {
+            console.warn(`Bỏ qua ảnh lỗi: ${image.id}`, err);
+          }
+        }
+
+        if (loadedImages.length < 2) continue;
+
+        // Tính kích thước ảnh ghép
+        const maxWidth = 1200;
+        const mergedWidth = Math.min(
+          maxWidth,
+          Math.max(...loadedImages.map((img) => Math.min(img.width, maxWidth))),
+        );
+
+        const mergedHeight = loadedImages.reduce((total, img) => {
+          const scale = Math.min(1, maxWidth / img.width);
+          return total + Math.round(img.height * scale);
+        }, 0);
+
+        const mergedCanvas = document.createElement("canvas");
+        mergedCanvas.width = mergedWidth;
+        mergedCanvas.height = mergedHeight;
+
+        const ctx = mergedCanvas.getContext("2d");
+        if (!ctx) continue;
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, mergedWidth, mergedHeight);
+
+        let offsetY = 0;
+        for (const img of loadedImages) {
+          const scale = Math.min(1, maxWidth / img.width);
+          const drawWidth = Math.round(img.width * scale);
+          const drawHeight = Math.round(img.height * scale);
+          ctx.drawImage(img, 0, offsetY, drawWidth, drawHeight);
+          offsetY += drawHeight;
+        }
+
+        let mergedBlob = await new Promise<Blob | null>((resolve) => {
+          mergedCanvas.toBlob(resolve, "image/png");
+        });
+
+        if (!mergedBlob || mergedBlob.size > 5 * 1024 * 1024) {
+          mergedBlob = await new Promise<Blob | null>((resolve) => {
+            mergedCanvas.toBlob(resolve, "image/jpeg", 0.8);
+          });
+        }
+
+        if (!mergedBlob) continue;
+
+        // Đặt tên có số trang rõ ràng
+        const mergedImage: UploadedImage = {
+          id: `merged_${String(batchIndex + 1).padStart(2, "0")}_pages_${startPage}-${endPage}`,
+          url: URL.createObjectURL(mergedBlob),
+        };
+
+        mergedImages.push(mergedImage);
+      }
+
+      if (mergedImages.length === 0) {
+        setOcrText("Không thể ghép ảnh nào.");
+        return;
+      }
+
+      // ===== THAY THẾ ẢNH GỐC BẰNG ẢNH GHÉP =====
+      // Xóa tất cả ảnh gốc, chỉ giữ ảnh ghép
+      setImages(mergedImages);
+      setCurrentIndex(0);
+      drawImage(mergedImages[0].url);
+
+      setOcrText(
+        `✅ Đã ghép ${sortedImages.length} ảnh thành ${mergedImages.length} trang.`,
+      );
     } catch (error) {
-      console.error(error);
-      setOcrText("Failed to merge images.");
+      console.error("Merge error:", error);
+      setOcrText(
+        "❌ Không thể ghép ảnh: " +
+          (error instanceof Error ? error.message : "Lỗi không xác định"),
+      );
     } finally {
       setIsProcessing(false);
     }
@@ -1763,13 +1883,13 @@ export default function useMangaTranslator() {
     const translatedLength = overlay.translatedText.trim().length || 1;
 
     const widthBasedFontSize =
-      scaledWidth / Math.max(6, translatedLength * 0.62);
+      scaledWidth / Math.max(6, translatedLength * 0.48);
 
-    const heightBasedFontSize = scaledHeight * 0.16;
+    const heightBasedFontSize = scaledHeight * 0.24;
 
     const fontSize = Math.max(
-      10,
-      Math.min(20, widthBasedFontSize, heightBasedFontSize),
+      12,
+      Math.min(28, widthBasedFontSize, heightBasedFontSize),
     );
 
     return {
@@ -1778,6 +1898,11 @@ export default function useMangaTranslator() {
       width: scaledWidth,
       height: scaledHeight,
       fontSize: `${fontSize}px`,
+      fontFamily:
+        '"Comic Sans MS", "Comic Neue", "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif',
+      fontWeight: 600,
+      lineHeight: 1.12,
+      letterSpacing: '0.01em',
     };
   };
 
@@ -1817,6 +1942,42 @@ export default function useMangaTranslator() {
     };
   };
 
+  // Hàm fetch manga từ URL
+  const fetchMangaFromUrl = async (url: string) => {
+    try {
+      setIsFetchingManga(true);
+      const response = await fetch("/api/fetch-manga", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await response.json();
+
+      if (data.success && data.images && data.images.length > 0) {
+        // Đánh số thứ tự rõ ràng từ 1 đến N
+        const sortedImages = data.images.map(
+          (imgUrl: string, index: number) => ({
+            id: `page_${String(index + 1).padStart(3, "0")}`,
+            url: imgUrl,
+          }),
+        );
+
+        setImages(sortedImages);
+        setCurrentIndex(0);
+        drawImage(sortedImages[0].url);
+        setOcrText(`Đã lấy ${sortedImages.length} ảnh từ URL.`);
+      } else {
+        setOcrText(data.error || "Không lấy được ảnh.");
+      }
+    } catch (error) {
+      console.error(error);
+      setOcrText("Lỗi kết nối server.");
+    } finally {
+      setIsFetchingManga(false);
+    }
+  };
+
+  // RETURN DUY NHẤT
   return {
     activeOverlay,
     activeOverlayId,
@@ -1828,6 +1989,7 @@ export default function useMangaTranslator() {
     currentOverlays,
     deletePage,
     deleteOverlay,
+    downloadCurrentImage,
     editorSentence,
     editorTranslation,
     getOverlayStyle,
@@ -1860,7 +2022,6 @@ export default function useMangaTranslator() {
     isTranslatingText,
     handleTranslateText,
     cropCurrentImage,
-    downloadCurrentImage,
     removeBackgroundFromCurrentImage,
     removeBackgroundStrength,
     selectPage,
@@ -1882,5 +2043,10 @@ export default function useMangaTranslator() {
     targetLanguage,
     setTheme,
     theme,
+    isFetchingManga,
+    fetchMangaFromUrl,
+    drawImage,
+    setImages,
+    setCurrentIndex,
   };
 }
