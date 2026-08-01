@@ -85,7 +85,7 @@ export default function UploadPanel({
 }: UploadPanelProps) {
   return (
     <div
-      className={`relative overflow-hidden rounded-3xl border p-3 shadow-2xl backdrop-blur sm:p-4 xl:sticky xl:top-6 ${
+      className={`relative min-w-0 w-full max-w-full overflow-x-hidden rounded-3xl border p-3 shadow-2xl backdrop-blur sm:p-4 xl:sticky xl:top-6 ${
         theme === 'dark'
           ? 'border-zinc-800 bg-zinc-900/70 shadow-black/30'
           : 'border-zinc-200 bg-white/85 shadow-zinc-300/40'
@@ -100,7 +100,7 @@ export default function UploadPanel({
           onDragStateChange(false)
         }
         onDrop={onDrop}
-        className={`flex min-h-[165px] cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed px-4 py-5 text-center transition sm:px-6 ${
+        className={`flex min-h-[165px] w-full min-w-0 max-w-full cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed px-4 py-5 text-center transition sm:px-6 ${
           isDragging
             ? theme === 'dark'
               ? 'border-white bg-zinc-800'
@@ -137,7 +137,7 @@ export default function UploadPanel({
       </label>
 
       <div className="mt-4 space-y-4">
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
+        <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-1">
           <LanguageSelector
             label="Ngôn ngữ gốc"
             value={sourceLanguage}

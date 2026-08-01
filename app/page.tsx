@@ -466,7 +466,7 @@ export default function HomePage() {
 
           {translatorMode === 'image' ? (
             <div className="grid items-start gap-6 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)] xl:gap-8">
-              <div className="space-y-4">
+              <div className="min-w-0 w-full space-y-4">
                 {/* Phần nhập URL */}
                 <div
                   className={`rounded-3xl border p-4 backdrop-blur sm:p-6 ${
@@ -581,9 +581,9 @@ export default function HomePage() {
                   hoveredOverlayId={hoveredOverlayId}
                   isSelecting={isSelecting}
                   isUpdatingOverlay={isUpdatingOverlay}
-                  onMouseDown={handleMouseDown}
-                  onMouseMove={handleMouseMove}
-                  onMouseUp={handleMouseUp}
+                  onPointerDown={handleMouseDown}
+                  onPointerMove={handleMouseMove}
+                  onPointerUp={handleMouseUp}
                   onScanSelection={scanSelection}
                   onClearSelection={clearSelection}
                   onCloseOverlayEditor={closeOverlayEditor}

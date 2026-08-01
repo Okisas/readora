@@ -1508,7 +1508,7 @@ export default function useMangaTranslator() {
     return { x, y, width, height };
   };
 
-  const getCanvasPoint = (e: React.MouseEvent<HTMLDivElement>) => {
+  const getCanvasPoint = (e: React.PointerEvent<HTMLDivElement>) => {
     const canvas = canvasRef.current;
 
     if (!canvas) return null;
@@ -1523,6 +1523,14 @@ export default function useMangaTranslator() {
         height: rect.height,
       },
     };
+  };
+
+  const capturePointer = (e: React.PointerEvent<HTMLDivElement>) => {
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Một số trình duyệt mobile không hỗ trợ pointer capture đầy đủ.
+    }
   };
 
   const updateResizeSelection = (
@@ -1577,12 +1585,14 @@ export default function useMangaTranslator() {
     return clampSelection({ x, y, width, height }, bounds);
   };
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isProcessing) return;
 
     const point = getCanvasPoint(e);
 
     if (!point) return;
+
+    capturePointer(e);
 
     interactionRef.current = {
       mode: "create",
@@ -1599,7 +1609,7 @@ export default function useMangaTranslator() {
     setIsSelecting(true);
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleMouseMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const interaction = interactionRef.current;
 
     if (!interaction) return;
@@ -1686,7 +1696,7 @@ export default function useMangaTranslator() {
     }
   };
 
-  const startMoveSelection = (e: React.MouseEvent<HTMLDivElement>) => {
+  const startMoveSelection = (e: React.PointerEvent<HTMLDivElement>) => {
     e.stopPropagation();
 
     if (isProcessing || selection.width === 0) return;
@@ -1694,6 +1704,8 @@ export default function useMangaTranslator() {
     const point = getCanvasPoint(e);
 
     if (!point) return;
+
+    capturePointer(e);
 
     interactionRef.current = {
       mode: "move",
@@ -1706,7 +1718,7 @@ export default function useMangaTranslator() {
 
   const startResizeSelection = (
     handle: ResizeHandle,
-    e: React.MouseEvent<HTMLDivElement>,
+    e: React.PointerEvent<HTMLDivElement>,
   ) => {
     e.stopPropagation();
 
@@ -1715,6 +1727,8 @@ export default function useMangaTranslator() {
     const point = getCanvasPoint(e);
 
     if (!point) return;
+
+    capturePointer(e);
 
     interactionRef.current = {
       mode: "resize",

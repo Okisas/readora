@@ -54,7 +54,7 @@ export default function LanguageSelector({
     option ? countryCodes[option.value] : undefined
 
   return (
-    <div className="relative">
+    <div className="relative min-w-0 w-full">
       <label
         className={`mb-2 block text-sm ${
           theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'
@@ -66,13 +66,13 @@ export default function LanguageSelector({
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
-        className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left outline-none ${
+        className={`flex w-full min-w-0 items-center justify-between rounded-2xl border px-4 py-3 text-left outline-none ${
           theme === 'dark'
             ? 'border-zinc-700 bg-zinc-800 text-white'
             : 'border-zinc-300 bg-white text-zinc-900'
         }`}
       >
-        <span>{selected?.label ?? 'Chọn ngôn ngữ'}</span>
+        <span className="min-w-0 truncate">{selected?.label ?? 'Chọn ngôn ngữ'}</span>
         <span className="ml-3 flex items-center gap-2">
           {code(selected) && (
             <span className="text-xs lowercase opacity-50">

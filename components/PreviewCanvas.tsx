@@ -26,13 +26,13 @@ type PreviewCanvasProps = {
   hoveredOverlayId: string | null
   isSelecting: boolean
   isUpdatingOverlay: boolean
-  onMouseDown: (
-    e: React.MouseEvent<HTMLDivElement>
+  onPointerDown: (
+    e: React.PointerEvent<HTMLDivElement>
   ) => void
-  onMouseMove: (
-    e: React.MouseEvent<HTMLDivElement>
+  onPointerMove: (
+    e: React.PointerEvent<HTMLDivElement>
   ) => void
-  onMouseUp: () => void
+  onPointerUp: () => void
   onScanSelection: () => void
   onClearSelection: () => void
   onCloseOverlayEditor: () => void
@@ -41,11 +41,11 @@ type PreviewCanvasProps = {
   onEditorSentenceChange: (value: string) => void
   onEditorTranslationChange: (value: string) => void
   onSelectionMoveStart: (
-    e: React.MouseEvent<HTMLDivElement>
+    e: React.PointerEvent<HTMLDivElement>
   ) => void
   onSelectionResizeStart: (
     handle: ResizeHandle,
-    e: React.MouseEvent<HTMLDivElement>
+    e: React.PointerEvent<HTMLDivElement>
   ) => void
   onOverlayHover: (id: string | null) => void
   onOverlaySelect: (overlayId: string) => void
@@ -85,9 +85,9 @@ export default function PreviewCanvas({
   hoveredOverlayId,
   isSelecting,
   isUpdatingOverlay,
-  onMouseDown,
-  onMouseMove,
-  onMouseUp,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
   onScanSelection,
   onClearSelection,
   onCloseOverlayEditor,
@@ -105,9 +105,7 @@ export default function PreviewCanvas({
 }: PreviewCanvasProps) {
   const showSelection =
     selection.width > 0 && selection.height > 0
-  const stopPointerEvent = (
-    e: React.MouseEvent<HTMLElement>
-  ) => {
+  const stopPointerEvent = (e: React.SyntheticEvent<HTMLElement>) => {
     e.stopPropagation()
   }
   const handles: Array<{
@@ -156,19 +154,15 @@ export default function PreviewCanvas({
         </div>
       ) : (
         <div
-          className="relative inline-block max-w-full"
-          onMouseDown={onMouseDown}
-          onMouseMove={onMouseMove}
-          onMouseUp={onMouseUp}
-          onMouseLeave={() => {
-            if (isSelecting) {
-              onMouseUp()
-            }
-          }}
+          className="relative inline-block max-w-full touch-none select-none"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
         >
           <canvas
             ref={canvasRef}
-            className="mx-auto h-auto max-w-full rounded-2xl cursor-crosshair"
+            className="mx-auto h-auto max-w-full rounded-2xl cursor-crosshair touch-none"
           />
 
           {showSelection && (
@@ -193,11 +187,11 @@ export default function PreviewCanvas({
                   width: selection.width,
                   height: selection.height,
                 }}
-                onMouseDown={stopPointerEvent}
+                onPointerDown={stopPointerEvent}
               >
                 <div
                   className="absolute inset-0 cursor-move"
-                  onMouseDown={onSelectionMoveStart}
+                  onPointerDown={onSelectionMoveStart}
                 />
 
                 {[ 
@@ -216,7 +210,7 @@ export default function PreviewCanvas({
                   <div
                     key={handle.key}
                     className={`absolute ${handle.className} ${handle.cursor} bg-transparent`}
-                    onMouseDown={(e) =>
+                    onPointerDown={(e) =>
                       onSelectionResizeStart(
                         handle.key,
                         e
@@ -273,20 +267,24 @@ export default function PreviewCanvas({
                   onOverlayHover(null)
                 }
                 onMouseDown={stopPointerEvent}
+                onPointerDown={stopPointerEvent}
                 title={overlay.sentenceText}
               >
                 <button
                   type="button"
                   onMouseDown={stopPointerEvent}
-                  onClick={() =>
+                  onPointerDown={stopPointerEvent}
+                  onClick={(event) => {
+                    event.stopPropagation()
                     onDeleteOverlay(overlay.id)
-                  }
-                  className={`absolute right-[15%] top-[20%] z-10 rounded-full px-2 py-1 text-[10px] font-semibold transition ${
+                  }}
+                  className={`overlay-delete-button pointer-events-auto absolute right-[15%] top-[20%] z-10 rounded-full px-2 py-1 text-[10px] font-semibold transition ${
                     theme === 'dark'
                       ? 'bg-black/70 text-white'
                       : 'bg-zinc-900/75 text-white'
                   } ${
-                    hoveredOverlayId === overlay.id
+                    hoveredOverlayId === overlay.id ||
+                    activeOverlayId === overlay.id
                       ? 'opacity-100'
                       : 'opacity-0'
                   }`}
@@ -313,6 +311,7 @@ export default function PreviewCanvas({
               }`}
               style={editorStyle}
               onMouseDown={stopPointerEvent}
+              onPointerDown={stopPointerEvent}
             >
               <div className="mb-2 flex items-center justify-between gap-2">
                 <div className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-400">
@@ -321,6 +320,7 @@ export default function PreviewCanvas({
                 <button
                   type="button"
                   onMouseDown={stopPointerEvent}
+                  onPointerDown={stopPointerEvent}
                   onClick={onCloseOverlayEditor}
                   className={`h-7 w-7 rounded-full text-sm ${
                     theme === 'dark'
@@ -375,6 +375,7 @@ export default function PreviewCanvas({
                 <button
                   type="button"
                   onMouseDown={stopPointerEvent}
+                  onPointerDown={stopPointerEvent}
                   onClick={onApplyOverlaySentence}
                   disabled={isUpdatingOverlay}
                   className={`flex-1 rounded-xl px-3 py-2 text-sm font-semibold ${
@@ -394,6 +395,7 @@ export default function PreviewCanvas({
                   <button
                     type="button"
                     onMouseDown={stopPointerEvent}
+                    onPointerDown={stopPointerEvent}
                     onClick={onSaveEditedTranslation}
                     className={`flex-1 rounded-xl border px-3 py-2 text-sm font-semibold ${
                       theme === 'dark'

@@ -24,3 +24,9 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@media (hover: none) {
+  .overlay-delete-button {
+    opacity: 1 !important;
+  }
+}

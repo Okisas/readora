@@ -23,7 +23,7 @@ export default function PageThumbnails({
   if (images.length === 0) return null
 
   return (
-    <div className="mt-6">
+    <div className="mt-6 min-w-0 max-w-full">
       <div
         className={`mb-3 flex items-center justify-between gap-3 text-sm ${
           theme === 'dark'
@@ -35,11 +35,11 @@ export default function PageThumbnails({
         <span className="text-xs">{images.length} trang</span>
       </div>
 
-      <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2 md:mx-0 md:grid md:grid-cols-3 md:gap-2 md:overflow-visible md:px-0 md:pb-0">
+      <div className="grid min-w-0 max-w-full grid-cols-2 gap-3 px-1 pb-2 md:px-0 md:pb-0">
         {images.map((image, index) => (
           <div
             key={image.id}
-            className={`relative aspect-[3/4] min-w-[116px] shrink-0 overflow-hidden rounded-xl border transition md:min-w-0 ${
+            className={`relative aspect-[3/4] min-w-0 w-full overflow-hidden rounded-xl border transition ${
               currentIndex === index
                 ? theme === 'dark'
                   ? 'border-white ring-2 ring-white/20'
@@ -57,11 +57,11 @@ export default function PageThumbnails({
               <img
                 src={image.url}
                 alt=""
-                className="h-full w-full object-cover"
+                className="h-full w-full bg-black object-contain"
               />
             </button>
 
-            <div className="absolute inset-x-1 top-1 flex items-center justify-between gap-1">
+            <div className="absolute inset-x-1 top-1 flex min-w-0 items-center justify-between gap-1">
               <button
                 type="button"
                 disabled={index === 0}
@@ -69,7 +69,7 @@ export default function PageThumbnails({
                   onMovePage(index, 'left')
                 }
                 aria-label="Đưa trang sang trái"
-                className={`rounded-full px-2 py-1 text-[11px] disabled:opacity-30 ${
+                className={`min-w-0 flex-1 whitespace-nowrap rounded-full px-1 py-1 text-[10px] disabled:opacity-30 sm:px-2 sm:text-[11px] ${
                   theme === 'dark'
                     ? 'bg-black/55 text-white'
                     : 'border border-zinc-300 bg-white/90 text-zinc-900'
@@ -82,7 +82,7 @@ export default function PageThumbnails({
                 type="button"
                 onClick={() => onDeletePage(index)}
                 aria-label="Xóa trang"
-                className={`rounded-full px-2 py-1 text-[11px] ${
+                className={`min-w-0 flex-1 whitespace-nowrap rounded-full px-1 py-1 text-[10px] sm:px-2 sm:text-[11px] ${
                   theme === 'dark'
                     ? 'bg-black/55 text-white'
                     : 'border border-zinc-300 bg-white/90 text-zinc-900'
@@ -100,7 +100,7 @@ export default function PageThumbnails({
                   onMovePage(index, 'right')
                 }
                 aria-label="Đưa trang sang phải"
-                className={`rounded-full px-2 py-1 text-[11px] disabled:opacity-30 ${
+                className={`min-w-0 flex-1 whitespace-nowrap rounded-full px-1 py-1 text-[10px] disabled:opacity-30 sm:px-2 sm:text-[11px] ${
                   theme === 'dark'
                     ? 'bg-black/55 text-white'
                     : 'border border-zinc-300 bg-white/90 text-zinc-900'
