@@ -1,6 +1,8 @@
 // app/api/fetch-manga/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import puppeteer from "puppeteer";
+import { launchBrowser } from "@/lib/launchBrowser";
+
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   try {
@@ -121,17 +123,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-blink-features=AutomationControlled",
-        "--disable-dev-shm-usage",
-        "--disable-web-security",
-        "--window-size=1920,1080",
-      ],
-    });
+    const browser = await launchBrowser();
 
     const page = await browser.newPage();
 

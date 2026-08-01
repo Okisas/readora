@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import puppeteer from "puppeteer";
+import { launchBrowser } from "@/lib/launchBrowser";
+
+export const maxDuration = 300;
 
 const supportedDomains = ["faloo.com", "qidian.com", "alicesw.com"];
 
@@ -7,7 +9,7 @@ const isHostOf = (hostname: string, domain: string) =>
   hostname === domain || hostname.endsWith(`.${domain}`);
 
 export async function POST(request: NextRequest) {
-  let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
+  let browser: Awaited<ReturnType<typeof launchBrowser>> | null = null;
 
   try {
     const { url } = await request.json();
@@ -24,15 +26,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    browser = await puppeteer.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-blink-features=AutomationControlled",
-      ],
-    });
+    browser = await launchBrowser();
 
     const page = await browser.newPage();
     await page.setUserAgent(
