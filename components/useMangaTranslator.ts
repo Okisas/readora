@@ -22,7 +22,6 @@ import {
   reorderVerticalLines,
 } from "@/components/ocrUtils";
 import type {
-  GoogleTranslateResponse,
   OCRCandidate,
   OCRLine,
   SelectionRect,
@@ -316,19 +315,22 @@ export default function useMangaTranslator() {
       };
 
       const controller = new AbortController();
-      const timeout = window.setTimeout(() => controller.abort(), 12000);
+      // Nội dung chương dài được dịch theo nhiều đoạn ở server, nên có thể
+      // cần lâu hơn 12 giây như trường hợp dịch một đoạn văn ngắn.
+      const timeout = window.setTimeout(() => controller.abort(), 180000);
       let response: Response;
 
       try {
-        response = await fetch(
-          "https://translate.googleapis.com/translate_a/single?client=gtx&sl=" +
-            (source ? (sourceMap[source] ?? "auto") : "auto") +
-            "&tl=" +
-            target +
-            "&dt=t&q=" +
-            encodeURIComponent(text),
-          { signal: controller.signal },
-        );
+        response = await fetch("/api/translate-text", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text,
+            source: source ? (sourceMap[source] ?? "auto") : "auto",
+            target,
+          }),
+          signal: controller.signal,
+        });
       } finally {
         window.clearTimeout(timeout);
       }
@@ -337,11 +339,15 @@ export default function useMangaTranslator() {
         throw new Error(`Translation request failed (${response.status})`);
       }
 
-      const data = (await response.json()) as GoogleTranslateResponse;
+      const data = (await response.json()) as { translatedText?: string };
 
-      return data[0].map((item) => item[0]).join("");
+      return data.translatedText || text;
     } catch (error) {
-      console.error(error);
+      if (error instanceof DOMException && error.name === "AbortError") {
+        console.warn("Translation request timed out");
+      } else {
+        console.error(error);
+      }
 
       return text;
     }
@@ -1276,12 +1282,12 @@ export default function useMangaTranslator() {
       drawImage(mergedImages[0].url);
 
       setOcrText(
-        `✅ Đã ghép ${sortedImages.length} ảnh thành ${mergedImages.length} trang.`,
+        `Đã ghép ${sortedImages.length} ảnh thành ${mergedImages.length} trang.`,
       );
     } catch (error) {
       console.error("Merge error:", error);
       setOcrText(
-        "❌ Không thể ghép ảnh: " +
+        "Không thể ghép ảnh: " +
           (error instanceof Error ? error.message : "Lỗi không xác định"),
       );
     } finally {
@@ -1888,7 +1894,7 @@ export default function useMangaTranslator() {
     const heightBasedFontSize = scaledHeight * 0.24;
 
     const fontSize = Math.max(
-      12,
+      8,
       Math.min(28, widthBasedFontSize, heightBasedFontSize),
     );
 
@@ -1902,7 +1908,7 @@ export default function useMangaTranslator() {
         '"Comic Sans MS", "Comic Neue", "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif',
       fontWeight: 600,
       lineHeight: 1.12,
-      letterSpacing: '0.01em',
+      letterSpacing: "0.01em",
     };
   };
 

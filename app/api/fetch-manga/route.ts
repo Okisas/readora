@@ -154,6 +154,27 @@ export async function POST(request: NextRequest) {
       .waitForSelector('img._images, img[src^="blob:"]', { timeout: 10000 })
       .catch(() => {});
 
+    const isWebtoon =
+      parsedUrl.hostname === "webtoons.com" ||
+      parsedUrl.hostname.endsWith(".webtoons.com");
+
+    // Webtoon lazy-loads chapter images as the reader is scrolled. Keep this
+    // branch separate from BookWalker/Manga Plus so unrelated page images are
+    // never mixed into the result.
+    if (isWebtoon) {
+      await page.evaluate(async () => {
+        let lastHeight = 0;
+        for (let index = 0; index < 40; index += 1) {
+          window.scrollTo(0, document.body.scrollHeight);
+          await new Promise((resolve) => setTimeout(resolve, 350));
+          const height = document.body.scrollHeight;
+          if (height === lastHeight) break;
+          lastHeight = height;
+        }
+        window.scrollTo(0, 0);
+      });
+    }
+
     // LẤY URL ẢNH TỪ CLASS _images
     const imageUrls = await page.evaluate(() => {
       const urls: string[] = [];
@@ -228,6 +249,21 @@ export async function POST(request: NextRequest) {
 
       return Array.from(new Set(sources));
     });
+
+    if (isWebtoon) {
+      imageSources = await page.evaluate(() => {
+        const urls = Array.from(document.querySelectorAll("img._images"))
+          .map((img) =>
+            img.getAttribute("data-url") ||
+            img.getAttribute("data-src") ||
+            img.getAttribute("src") ||
+            "",
+          )
+          .filter((src) => src.startsWith("http"));
+
+        return Array.from(new Set(urls));
+      });
+    }
 
     // BookWalker only keeps the current page as a blob image. Moving the
     // reader with the wheel creates the next blob, so capture each page in

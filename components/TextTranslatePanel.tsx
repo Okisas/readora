@@ -7,7 +7,11 @@ type TextTranslatePanelProps = {
   sourceLanguage: string
   targetLanguage: string
   theme: 'dark' | 'light'
-  onInputChange: (value: string) => void
+  textUrl: string
+  chapterTitle: string
+  isFetchingUrl: boolean
+  onTextUrlChange: (value: string) => void
+  onFetchUrl: () => void
   onSourceLanguageChange: (value: string) => void
   onTargetLanguageChange: (value: string) => void
   onTranslate: () => void
@@ -57,7 +61,11 @@ export default function TextTranslatePanel({
   sourceLanguage = 'eng',
   targetLanguage = 'vi',
   theme = 'dark',
-  onInputChange,
+  textUrl,
+  chapterTitle,
+  isFetchingUrl,
+  onTextUrlChange,
+  onFetchUrl,
   onSourceLanguageChange,
   onTargetLanguageChange,
   onTranslate,
@@ -65,13 +73,59 @@ export default function TextTranslatePanel({
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)] xl:gap-8">
       <div
-        className={`rounded-3xl border p-4 shadow-2xl backdrop-blur sm:p-6 lg:sticky lg:top-6 ${
+        className={`self-start rounded-3xl border p-4 shadow-2xl backdrop-blur sm:p-6 lg:sticky lg:top-6 lg:h-fit ${
           theme === 'dark'
             ? 'border-zinc-800 bg-zinc-900/70 shadow-black/30'
             : 'border-zinc-200 bg-white/85 shadow-zinc-300/40'
         }`}
       >
         <div className="space-y-4">
+          <div>
+            <div className="mb-2 text-sm font-semibold">Lấy nội dung chương</div>
+            <p className={`mb-3 text-xs leading-relaxed ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-600'}`}>
+              Dán URL chương từ Faloo, Qidian hoặc AliceSW.
+            </p>
+            <input
+              type="url"
+              value={textUrl}
+              onChange={(event) => onTextUrlChange(event.target.value)}
+              placeholder="Nhập URL chương truyện"
+              className={`mb-3 w-full rounded-xl border px-4 py-3 text-sm outline-none ${
+                theme === 'dark'
+                  ? 'border-zinc-700 bg-black/40 text-zinc-200 placeholder:text-zinc-500'
+                  : 'border-zinc-300 bg-white text-zinc-900 placeholder:text-zinc-400'
+              }`}
+            />
+            <button
+              type="button"
+              onClick={onFetchUrl}
+              disabled={isFetchingUrl || !textUrl.trim()}
+              className={`w-full rounded-xl px-4 py-3 text-sm font-semibold disabled:opacity-50 ${
+                theme === 'dark' ? 'bg-white text-black' : 'bg-zinc-900 text-white'
+              }`}
+            >
+              {isFetchingUrl ? 'Đang lấy...' : 'Lấy nội dung'}
+            </button>
+            {chapterTitle && (
+              <div>
+                <div className={`mt-3 rounded-xl px-3 py-2 text-xs font-semibold leading-relaxed ${
+                  theme === 'dark' ? 'bg-zinc-800 text-zinc-200' : 'bg-zinc-100 text-zinc-800'
+                }`}>
+                  {chapterTitle}
+                </div>
+                <p className={`mt-2 rounded-xl px-3 py-2 text-xs font-semibold leading-relaxed ${
+                  theme === 'dark'
+                    ? 'bg-zinc-800 text-zinc-200'
+                    : 'bg-zinc-100 text-zinc-800'
+                }`}>
+                  Hãy chọn ngôn ngữ phù hợp và ấn “Dịch” để lấy bản dịch.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className={`h-px ${theme === 'dark' ? 'bg-zinc-800' : 'bg-zinc-200'}`} />
+
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
             <LanguageSelector
               label="Ngôn ngữ gốc"
@@ -104,37 +158,12 @@ export default function TextTranslatePanel({
           >
             {isTranslating
               ? 'Đang dịch...'
-              : 'Dịch văn bản'}
+              : 'Dịch'}
           </button>
         </div>
       </div>
 
-      <div className="space-y-6 xl:space-y-8">
-        <div
-          className={`rounded-3xl border p-4 backdrop-blur sm:p-6 ${
-            theme === 'dark'
-              ? 'border-zinc-800 bg-zinc-900/70'
-              : 'border-zinc-200 bg-white/85'
-          }`}
-        >
-          <h2 className="mb-4 text-xl font-bold">
-            Văn bản cần dịch
-          </h2>
-
-          <textarea
-            value={inputText}
-            onChange={(e) =>
-              onInputChange(e.target.value)
-            }
-            placeholder="Nhập văn bản cần dịch..."
-            className={`min-h-[220px] w-full resize-y rounded-2xl border p-4 outline-none sm:min-h-[260px] ${
-              theme === 'dark'
-                ? 'border-zinc-800 bg-black/40 text-zinc-200 placeholder:text-zinc-500'
-                : 'border-zinc-200 bg-zinc-50 text-zinc-900 placeholder:text-zinc-400'
-            }`}
-          />
-        </div>
-
+      <div className="min-w-0">
         <div
           className={`rounded-3xl border p-4 backdrop-blur sm:p-6 ${
             theme === 'dark'

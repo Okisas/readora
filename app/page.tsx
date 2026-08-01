@@ -1,8 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { Moon, Sun } from 'lucide-react'
+import {
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  ArrowUp,
+  MessageCircle,
+  Moon,
+  Sun,
+  X,
+} from 'lucide-react'
 import PreviewCanvas from '@/components/PreviewCanvas'
 import TextTranslatePanel from '@/components/TextTranslatePanel'
 import UploadPanel from '@/components/UploadPanel'
@@ -75,14 +84,82 @@ export default function HomePage() {
   // State cho URL input
   const [mangaUrl, setMangaUrl] = useState('')
   const [isFetchingUrl, setIsFetchingUrl] = useState(false)
+  const [textUrl, setTextUrl] = useState('')
+  const [textChapterTitle, setTextChapterTitle] = useState('')
+  const [isFetchingTextUrl, setIsFetchingTextUrl] = useState(false)
+
+  const webtoonChapter = (() => {
+    try {
+      const parsedUrl = new URL(mangaUrl)
+      const isWebtoon =
+        parsedUrl.protocol === 'https:' &&
+        (parsedUrl.hostname === 'webtoons.com' ||
+          parsedUrl.hostname.endsWith('.webtoons.com'))
+      const episodeNumber = Number(parsedUrl.searchParams.get('episode_no'))
+
+      if (!isWebtoon || !Number.isInteger(episodeNumber) || episodeNumber < 1) {
+        return null
+      }
+
+      return { parsedUrl, episodeNumber }
+    } catch {
+      return null
+    }
+  })()
 
   // State cho auto translate
   const [isAutoTranslating, setIsAutoTranslating] = useState(false)
+  const [toast, setToast] = useState<{
+    message: string
+    type: 'success' | 'error' | 'info'
+  } | null>(null)
+  const [isGuideOpen, setIsGuideOpen] = useState(false)
+  const [hasMounted, setHasMounted] = useState(false)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const showToast = (
+    message: string,
+    type: 'success' | 'error' | 'info' = 'info'
+  ) => {
+    if (toastTimerRef.current) {
+      clearTimeout(toastTimerRef.current)
+    }
+
+    setToast({ message, type })
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null)
+      toastTimerRef.current = null
+    }, 3500)
+  }
+
+  useEffect(() => {
+    setHasMounted(true)
+    const guideSeen = window.localStorage.getItem('readora-guide-seen')
+    if (!guideSeen) {
+      setIsGuideOpen(true)
+    }
+
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current)
+      }
+    }
+  }, [])
+
+  const closeGuide = () => {
+    setIsGuideOpen(false)
+    window.localStorage.setItem('readora-guide-seen', '1')
+  }
 
   // Hàm xử lý lấy ảnh từ URL
-  const handleFetchFromUrl = async () => {
-    if (!mangaUrl.trim()) {
-      alert('Vui lòng nhập URL chương truyện')
+  const handleFetchFromUrl = async (
+    urlOverride?: string,
+    replaceImages = false,
+  ) => {
+    const requestedUrl = (urlOverride ?? mangaUrl).trim()
+
+    if (!requestedUrl) {
+      showToast('Vui lòng nhập URL chương truyện', 'error')
       return
     }
 
@@ -91,7 +168,7 @@ export default function HomePage() {
       const response = await fetch('/api/fetch-manga', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: mangaUrl.trim() })
+        body: JSON.stringify({ url: requestedUrl })
       })
 
       const data = await response.json()
@@ -103,29 +180,46 @@ export default function HomePage() {
           url: imgData
         }))
 
-        setImages((prev: any[]) => [...prev, ...newImages])
+        setImages((prev: any[]) =>
+          replaceImages ? newImages : [...prev, ...newImages],
+        )
         
         if (newImages.length > 0) {
           setCurrentIndex(0)
           drawImage(newImages[0].url)
         }
         
-        alert(`Đã tải thành công ${newImages.length} ảnh!`)
+        showToast(`Đã tải thành công ${newImages.length} ảnh!`, 'success')
       } else {
-        alert(data.error || 'Không tìm thấy ảnh từ URL này')
+        showToast(data.error || 'Không tìm thấy ảnh từ URL này', 'error')
       }
     } catch (error) {
       console.error('Error fetching manga:', error)
-      alert('Lỗi kết nối server. Vui lòng thử lại.')
+      showToast('Lỗi kết nối server. Vui lòng thử lại.', 'error')
     } finally {
       setIsFetchingUrl(false)
     }
   }
 
+  const navigateWebtoonChapter = async (direction: -1 | 1) => {
+    if (!webtoonChapter) return
+
+    const nextEpisode = webtoonChapter.episodeNumber + direction
+    if (nextEpisode < 1) {
+      showToast('Đây là chap đầu tiên', 'info')
+      return
+    }
+
+    const nextUrl = new URL(webtoonChapter.parsedUrl.toString())
+    nextUrl.searchParams.set('episode_no', String(nextEpisode))
+    setMangaUrl(nextUrl.toString())
+    await handleFetchFromUrl(nextUrl.toString(), true)
+  }
+
   // Hàm xử lý dịch tự động
   const handleAutoTranslate = async () => {
     if (images.length === 0) {
-      alert('Vui lòng upload ảnh hoặc lấy ảnh từ URL trước')
+      showToast('Vui lòng upload ảnh hoặc lấy ảnh từ URL trước', 'error')
       return
     }
 
@@ -169,21 +263,52 @@ export default function HomePage() {
         setImages(newImages)
         drawImage(newImage.url)
         
-        alert(`Đã dịch ${data.count} dòng chữ.`)
+        showToast(`Đã dịch ${data.count} dòng chữ.`, 'success')
       } else {
-        alert(data.error || 'Dịch thất bại')
+        showToast(data.error || 'Dịch thất bại', 'error')
       }
     } catch (error) {
       console.error('Auto translate error:', error)
-      alert('Lỗi kết nối server')
+      showToast('Lỗi kết nối server', 'error')
     } finally {
       setIsAutoTranslating(false)
     }
   }
 
+  const handleFetchTextFromUrl = async () => {
+    if (!textUrl.trim()) {
+      showToast('Vui lòng nhập URL chương truyện', 'error')
+      return
+    }
+
+    try {
+      setIsFetchingTextUrl(true)
+      const response = await fetch('/api/fetch-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: textUrl.trim() }),
+      })
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        showToast(data.error || 'Không lấy được nội dung chương', 'error')
+        return
+      }
+
+      setTextChapterTitle(data.title || `Nội dung từ ${data.site}`)
+      setTextInput(data.content)
+      showToast(`Đã lấy nội dung từ ${data.site}`, 'success')
+    } catch (error) {
+      console.error('Text chapter fetch error:', error)
+      showToast('Lỗi kết nối server. Vui lòng thử lại.', 'error')
+    } finally {
+      setIsFetchingTextUrl(false)
+    }
+  }
+
   return (
     <main
-      className={`min-h-screen overflow-hidden ${
+      className={`min-h-screen overflow-x-hidden ${
         theme === 'dark'
           ? 'bg-black text-white'
           : 'bg-[linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)] text-zinc-950'
@@ -264,22 +389,6 @@ export default function HomePage() {
           </div>
 
           <div className="mb-5 text-center sm:mb-6">
-            <div
-              className={`mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] backdrop-blur sm:mb-4 sm:text-xs ${
-                theme === 'dark'
-                  ? 'border-zinc-800 bg-zinc-900/70 text-zinc-300'
-                  : 'border-zinc-200 bg-white/75 text-zinc-700'
-              }`}
-            >
-              Dịch manga, manhwa và manhua
-            </div>
-
-            <h1 className="mb-3 text-3xl font-black leading-tight tracking-tight sm:text-4xl md:mb-4 md:text-5xl">
-              Dịch truyện
-              <br />
-              từ hình ảnh
-            </h1>
-
             <p
               className={`mx-auto max-w-xl text-sm leading-relaxed sm:text-base ${
                 theme === 'dark'
@@ -383,7 +492,7 @@ export default function HomePage() {
                     />
                     <button
                       type="button"
-                      onClick={handleFetchFromUrl}
+                      onClick={() => handleFetchFromUrl()}
                       disabled={isFetchingUrl}
                       className={`rounded-xl px-5 py-2 text-sm font-semibold whitespace-nowrap transition disabled:opacity-50 ${
                         theme === 'dark'
@@ -394,6 +503,43 @@ export default function HomePage() {
                       {isFetchingUrl ? 'Đang lấy...' : 'Lấy ảnh'}
                     </button>
                   </div>
+                  {webtoonChapter && (
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => navigateWebtoonChapter(-1)}
+                        disabled={isFetchingUrl || webtoonChapter.episodeNumber <= 1}
+                        className={`inline-flex items-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                          theme === 'dark'
+                            ? 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700'
+                            : 'bg-zinc-100 text-zinc-800 hover:bg-zinc-200'
+                        }`}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Chap trước
+                      </button>
+                      <span
+                        className={`text-xs ${
+                          theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'
+                        }`}
+                      >
+                        Chap {webtoonChapter.episodeNumber}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => navigateWebtoonChapter(1)}
+                        disabled={isFetchingUrl}
+                        className={`inline-flex items-center gap-1 rounded-xl px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                          theme === 'dark'
+                            ? 'bg-zinc-800 text-zinc-100 hover:bg-zinc-700'
+                            : 'bg-zinc-100 text-zinc-800 hover:bg-zinc-200'
+                        }`}
+                      >
+                        Chap sau
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
                   <p className={`mt-2 text-xs ${
                     theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'
                   }`}>
@@ -475,7 +621,11 @@ export default function HomePage() {
               sourceLanguage={textSourceLanguage}
               targetLanguage={textTargetLanguage}
               theme={theme}
-              onInputChange={setTextInput}
+              textUrl={textUrl}
+              chapterTitle={textChapterTitle}
+              isFetchingUrl={isFetchingTextUrl}
+              onTextUrlChange={setTextUrl}
+              onFetchUrl={handleFetchTextFromUrl}
               onSourceLanguageChange={setTextSourceLanguage}
               onTargetLanguageChange={setTextTargetLanguage}
               onTranslate={handleTranslateText}
@@ -483,6 +633,132 @@ export default function HomePage() {
           )}
         </div>
       </div>
+
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`fixed bottom-4 right-4 z-[10000] max-w-[calc(100vw-2rem)] rounded-2xl border px-4 py-3 text-sm font-medium shadow-2xl backdrop-blur sm:bottom-6 sm:right-6 sm:max-w-sm ${
+            toast.type === 'success'
+              ? 'border-emerald-400/30 bg-emerald-950/90 text-emerald-100'
+              : toast.type === 'error'
+                ? 'border-red-400/30 bg-red-950/90 text-red-100'
+                : 'border-zinc-700 bg-zinc-950/95 text-zinc-100'
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
+
+      {hasMounted && (
+        <div className="fixed bottom-4 right-4 z-[9999] sm:bottom-6 sm:right-6">
+          {isGuideOpen && (
+            <div
+              className={`mb-3 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-3xl border shadow-2xl ${
+                theme === 'dark'
+                  ? 'border-zinc-700 bg-zinc-950 text-zinc-100'
+                  : 'border-zinc-200 bg-white text-zinc-900'
+              }`}
+            >
+              <div
+                className={`flex items-center justify-between px-4 py-3 ${
+                  theme === 'dark' ? 'bg-zinc-900' : 'bg-zinc-50'
+                }`}
+              >
+                <div className="flex items-center gap-2 text-sm font-bold">
+                  <BookOpen className="h-4 w-4" />
+                  Hướng dẫn sử dụng
+                </div>
+                <button
+                  type="button"
+                  onClick={closeGuide}
+                  aria-label="Đóng hướng dẫn"
+                  className={`rounded-full p-1 transition ${
+                    theme === 'dark'
+                      ? 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                      : 'text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900'
+                  }`}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="max-h-[min(70vh,34rem)] space-y-4 overflow-y-auto px-4 py-4 text-xs leading-relaxed sm:text-sm">
+                <section>
+                  <h2 className="mb-1 font-bold">Readora hỗ trợ gì?</h2>
+                  <p className={theme === 'dark' ? 'text-zinc-300' : 'text-zinc-600'}>
+                    Hiện tại Readora hỗ trợ lấy ảnh chương từ <strong>Webtoon</strong> và <strong>MangaDex</strong>.
+                    Các trang khác chưa được hỗ trợ ổn định.
+                  </p>
+                </section>
+
+                <section>
+                  <h2 className="mb-1 font-bold">Dịch văn bản</h2>
+                  <p className={theme === 'dark' ? 'text-zinc-300' : 'text-zinc-600'}>
+                    Dán URL chương, nhấn “Lấy nội dung”, chọn đúng ngôn ngữ gốc và ngôn ngữ đích, rồi nhấn “Dịch”. Nội dung bản dịch sẽ hiển thị ở khung bên phải.
+                  </p>
+                </section>
+
+                <section>
+                  <h2 className="mb-1 font-bold">Theo từng nguồn</h2>
+                  <ul className={`space-y-1 pl-4 ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-600'}`}>
+                    <li className="list-disc"><strong>Webtoon:</strong> dán link chapter, sau đó dùng nút chap trước/chap sau để chuyển chương.</li>
+                    <li className="list-disc"><strong>MangaDex:</strong> dán link chapter để lấy toàn bộ ảnh của chapter.</li>
+                    <li className="list-disc"><strong>Ảnh:</strong> tải ảnh lên hoặc kéo thả ảnh trực tiếp vào khu vực tải ảnh.</li>
+                    <li className="list-disc"><strong>Văn bản:</strong> dán URL chương từ Faloo, Qidian hoặc AliceSW để lấy nội dung rồi dịch.</li>
+                  </ul>
+                </section>
+
+                <section>
+                  <h2 className="mb-1 font-bold">Cách dịch ảnh tốt nhất</h2>
+                  <ol className={`space-y-1 pl-4 ${theme === 'dark' ? 'text-zinc-300' : 'text-zinc-600'}`}>
+                    <li className="list-decimal">Chọn ảnh cần dịch.</li>
+                    <li className="list-decimal">Nhấp vào ảnh để mở vùng quét.</li>
+                    <li className="list-decimal">Kéo khung bao phủ toàn bộ khung thoại hoặc ô chữ.</li>
+                    <li className="list-decimal">Nhấn <strong>Quét</strong>, kiểm tra bản dịch rồi áp dụng lên ảnh.</li>
+                  </ol>
+                </section>
+
+                <section className={`rounded-2xl px-3 py-2 ${
+                  theme === 'dark' ? 'bg-amber-950/40 text-amber-100' : 'bg-amber-50 text-amber-900'
+                }`}>
+                  <h2 className="mb-1 font-bold">Mẹo để dịch chính xác hơn</h2>
+                  <p>
+                    Hãy quét <strong>hết khung thoại của nhân vật</strong>, gồm cả các dòng chữ ở mép trong.
+                    Không nên quét quá nhỏ hoặc cắt mất chữ. Ảnh càng rõ và khung quét càng đầy đủ thì OCR và bản dịch càng tốt.
+                  </p>
+                </section>
+              </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setIsGuideOpen((open) => !open)}
+            aria-label="Mở hướng dẫn sử dụng"
+            className={`ml-auto flex h-12 w-12 items-center justify-center rounded-full shadow-xl transition hover:scale-105 ${
+              theme === 'dark'
+                ? 'bg-white text-black hover:bg-zinc-200'
+                : 'bg-zinc-900 text-white hover:bg-zinc-800'
+            }`}
+          >
+            <MessageCircle className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        aria-label="Trở lại đầu trang"
+        className={`fixed bottom-20 right-4 z-[10001] flex h-10 w-10 items-center justify-center rounded-full shadow-xl transition hover:scale-105 sm:bottom-24 sm:right-6 ${
+          theme === 'dark'
+            ? 'bg-zinc-800 text-white hover:bg-zinc-700'
+            : 'bg-white text-zinc-900 hover:bg-zinc-100'
+        }`}
+      >
+        <ArrowUp className="h-4 w-4" />
+      </button>
     </main>
   )
 }

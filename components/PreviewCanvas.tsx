@@ -294,7 +294,10 @@ export default function PreviewCanvas({
                   Xóa
                 </button>
 
-                <div className="flex h-full w-full items-center justify-center px-5 py-4 text-center font-semibold leading-[1.12]">
+                <div
+                  className="flex h-full w-full items-center justify-center break-words px-5 py-4 text-center font-semibold leading-[1.12]"
+                  style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
+                >
                   {overlay.translatedText}
                 </div>
               </div>

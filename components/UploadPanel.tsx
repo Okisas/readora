@@ -85,7 +85,7 @@ export default function UploadPanel({
 }: UploadPanelProps) {
   return (
     <div
-      className={`relative overflow-hidden rounded-3xl border p-4 shadow-2xl backdrop-blur sm:p-6 xl:sticky xl:top-6 ${
+      className={`relative overflow-hidden rounded-3xl border p-3 shadow-2xl backdrop-blur sm:p-4 xl:sticky xl:top-6 ${
         theme === 'dark'
           ? 'border-zinc-800 bg-zinc-900/70 shadow-black/30'
           : 'border-zinc-200 bg-white/85 shadow-zinc-300/40'
@@ -100,7 +100,7 @@ export default function UploadPanel({
           onDragStateChange(false)
         }
         onDrop={onDrop}
-        className={`flex min-h-[220px] cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed px-5 py-8 text-center transition sm:px-8 ${
+        className={`flex min-h-[165px] cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed px-4 py-5 text-center transition sm:px-6 ${
           isDragging
             ? theme === 'dark'
               ? 'border-white bg-zinc-800'
@@ -110,14 +110,14 @@ export default function UploadPanel({
             : 'border-zinc-300 hover:border-zinc-500'
         }`}
       >
-        <Upload className="mb-4 h-10 w-10 sm:h-12 sm:w-12" />
+        <Upload className="mb-3 h-8 w-8 sm:h-10 sm:w-10" />
 
-        <div className="mb-2 text-base font-semibold sm:text-lg">
+        <div className="mb-1 text-sm font-semibold sm:text-base">
           Tải ảnh lên
         </div>
 
         <div
-          className={`max-w-[18rem] text-sm leading-relaxed ${
+          className={`max-w-[18rem] text-xs leading-relaxed ${
             theme === 'dark'
               ? 'text-zinc-400'
               : 'text-zinc-500'
@@ -136,7 +136,7 @@ export default function UploadPanel({
         />
       </label>
 
-      <div className="mt-6 space-y-4">
+      <div className="mt-4 space-y-4">
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
           <LanguageSelector
             label="Ngôn ngữ gốc"
@@ -153,18 +153,6 @@ export default function UploadPanel({
             theme={theme}
             onChange={onTargetLanguageChange}
           />
-        </div>
-
-        <div
-          className={`rounded-2xl border px-4 py-3 text-sm leading-relaxed ${
-            theme === 'dark'
-              ? 'border-zinc-800 bg-black/30 text-zinc-300'
-              : 'border-zinc-200 bg-zinc-50 text-zinc-700'
-          }`}
-        >
-          Hãy kéo vùng quét bao phủ toàn bộ khung văn bản cần dịch,
-          bao gồm cả phần chữ ở sát mép. Có thể kéo khung để di chuyển
-          hoặc kéo các góc/cạnh để điều chỉnh, sau đó nhấn “Quét”.
         </div>
 
         {statusMessage && (
