@@ -1,0 +1,6 @@
+# Vietnamese terminology notes
+# Format: preferred Vietnamese term=stable English/Japanese label
+
+Tuyết Nãi=Yukino
+
+# Dùng file này để ghi cách gọi thống nhất trong bản dịch.

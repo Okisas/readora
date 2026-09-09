@@ -85,7 +85,7 @@ export default function UploadPanel({
 }: UploadPanelProps) {
   return (
     <div
-      className={`relative min-w-0 w-full max-w-full overflow-x-hidden rounded-3xl border p-3 shadow-2xl backdrop-blur sm:p-4 xl:sticky xl:top-6 ${
+      className={`relative min-w-0 w-full max-w-full overflow-x-clip rounded-3xl border p-3 shadow-2xl backdrop-blur sm:p-4 xl:sticky xl:top-6 ${
         theme === 'dark'
           ? 'border-zinc-800 bg-zinc-900/70 shadow-black/30'
           : 'border-zinc-200 bg-white/85 shadow-zinc-300/40'

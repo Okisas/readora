@@ -1,16 +1,11 @@
 // app/api/vision-translate/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import vision from "@google-cloud/vision";
-import { Translate } from "@google-cloud/translate/build/src/v2/index.js";
 import { createCanvas, loadImage } from "canvas";
+import { translateWithFallback } from "@/lib/googleTranslate";
 
 // Khởi tạo clients
 const visionClient = new vision.ImageAnnotatorClient({
-  keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
-});
-
-// Khởi tạo Translate client
-const translateClient = new Translate({
   keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
 });
 
@@ -45,8 +40,9 @@ export async function POST(request: NextRequest) {
         if (!text.trim()) return null;
 
         try {
-          const [translation] = await translateClient.translate(
+          const { text: translation } = await translateWithFallback(
             text,
+            sourceLanguage || "auto",
             targetLanguage || "vi",
           );
 

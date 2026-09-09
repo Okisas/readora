@@ -1,6 +1,7 @@
 // app/api/auto-translate/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { extractTextWithPositions } from "@/components/ocrUtils";
+import { translateWithFallback } from "@/lib/googleTranslate";
 
 export const runtime = "nodejs";
 
@@ -16,17 +17,6 @@ const translateLanguageMap: Record<string, string> = {
 
 const toTranslateLanguage = (language: string | undefined, fallback: string) =>
   translateLanguageMap[language ?? ""] ?? language ?? fallback;
-
-const fetchWithTimeout = async (url: string, timeoutMs = 12000) => {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-
-  try {
-    return await fetch(url, { signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
-};
 
 export async function POST(request: NextRequest) {
   try {
@@ -55,31 +45,23 @@ export async function POST(request: NextRequest) {
     const source = toTranslateLanguage(sourceLanguage, "auto");
     const target = toTranslateLanguage(targetLanguage, "vi");
 
-    // 2. Dịch từng dòng. Keep requests concurrent, but use valid Google
-    // language codes and a timeout so one stalled request cannot hang the UI.
-    const translatedLines = await Promise.all(
-      ocrResult.lines.map(async (line: any) => {
-        const text = line.text.trim();
-        if (!text) return { ...line, translatedText: "" };
+    // Dịch tuần tự để hạn chế burst request lên Google Translate.
+    const translatedLines = [];
+    for (const line of ocrResult.lines as any[]) {
+      const text = line.text.trim();
+      if (!text) {
+        translatedLines.push({ ...line, translatedText: "" });
+        continue;
+      }
 
-        try {
-          const translateResponse = await fetchWithTimeout(
-            `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${source}&tl=${target}&dt=t&q=${encodeURIComponent(text)}`,
-          );
-          if (!translateResponse.ok) {
-            throw new Error(`Translation request failed (${translateResponse.status})`);
-          }
-          const data = await translateResponse.json();
-          const translated =
-            data[0]?.map((item: any) => item[0]).join("") || text;
-
-          return { ...line, translatedText: translated };
-        } catch (err) {
-          console.error("Dịch lỗi:", text, err);
-          return { ...line, translatedText: text };
-        }
-      }),
-    );
+      try {
+        const { text: translated } = await translateWithFallback(text, source, target);
+        translatedLines.push({ ...line, translatedText: translated });
+      } catch (err) {
+        console.error("Dịch lỗi:", text, err);
+        translatedLines.push({ ...line, translatedText: text });
+      }
+    }
 
     // 3. Tạo ảnh mới với chữ đã dịch (dùng canvas)
     // Lưu ý: Cần cài đặt canvas: npm install canvas

@@ -28,6 +28,8 @@ import type {
   TranslationOverlay,
   UploadedImage,
 } from "@/components/types";
+import { translateFromBrowser } from "@/components/clientGoogleTranslate";
+import { translateWithChromeBuiltIn } from "@/components/clientChromeTranslator";
 
 const STORAGE_KEY = "manga-translations-v1";
 const MIN_SELECTION_SIZE = 48;
@@ -93,20 +95,22 @@ export default function useMangaTranslator() {
   const [targetLanguage, setTargetLanguage] = useState("vi");
 
   const [translatorMode, setTranslatorMode] = useState<
-    "image" | "text" | "crop" | "remove-bg" | "donate"
+    "image" | "text" | "history" | "crop" | "remove-bg" | "donate"
   >("image");
 
-  const [textSourceLanguage, setTextSourceLanguage] = useState("eng");
+  const [textSourceLanguage, setTextSourceLanguage] = useState("auto");
 
   const [textTargetLanguage, setTextTargetLanguage] = useState("vi");
 
   const [textInput, setTextInput] = useState("");
 
   const [textOutput, setTextOutput] = useState("");
+  const [textTranslationError, setTextTranslationError] = useState<string | null>(null);
   const [imageToolStatus, setImageToolStatus] = useState("");
   const [removeBackgroundStrength, setRemoveBackgroundStrength] = useState(38);
 
   const [isTranslatingText, setIsTranslatingText] = useState(false);
+  const [textTranslationProgress, setTextTranslationProgress] = useState({ completed: 0, total: 0 });
 
   const [theme, setTheme] = useState<"dark" | "light">("dark");
 
@@ -297,6 +301,7 @@ export default function useMangaTranslator() {
     text: string,
     target: string,
     source?: string,
+    onChunk?: (translatedText: string, index: number, total: number, sourceText?: string) => void,
   ) => {
     try {
       const sourceMap: Record<string, string> = {
@@ -320,6 +325,36 @@ export default function useMangaTranslator() {
       const timeout = window.setTimeout(() => controller.abort(), 180000);
       let response: Response;
 
+      // Ưu tiên gọi Google từ chính browser của người dùng. Nếu CORS, 429
+      // hoặc trình duyệt chặn request thì mới rơi xuống route server hiện tại.
+      try {
+        const chromeTranslated = await translateWithChromeBuiltIn(
+          text,
+          source ? (sourceMap[source] ?? source) : "auto",
+          target,
+          onChunk,
+        );
+        return chromeTranslated
+          .replace(/&#x20;|&#32;|&nbsp;/gi, " ")
+          .replace(/\s+$/g, "");
+      } catch (chromeError) {
+        console.info("Chrome Translator unavailable; using Google/server fallback:", chromeError);
+      }
+
+      try {
+        const clientTranslated = await translateFromBrowser(
+          text,
+          source ? (sourceMap[source] ?? "auto") : "auto",
+          target,
+          onChunk,
+        );
+        return clientTranslated
+          .replace(/&#x20;|&#32;|&nbsp;/gi, " ")
+          .replace(/\s+$/g, "");
+      } catch (clientError) {
+        console.info("Browser Google translation unavailable; using server fallback:", clientError);
+      }
+
       try {
         response = await fetch("/api/translate-text", {
           method: "POST",
@@ -336,12 +371,75 @@ export default function useMangaTranslator() {
       }
 
       if (!response.ok) {
-        throw new Error(`Translation request failed (${response.status})`);
+        let message = `Translation request failed (${response.status})`;
+        try {
+          const errorData = (await response.json()) as { error?: string };
+          if (errorData.error) message = errorData.error;
+        } catch {
+          // Giữ message mặc định nếu response lỗi không phải JSON.
+        }
+        throw new Error(message);
+      }
+
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/x-ndjson") && response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        const translatedChunks: string[] = [];
+        const receivedIndexes = new Set<number>();
+        let expectedTotal = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            const chunk = JSON.parse(line) as {
+              text?: string;
+              error?: string;
+              index?: number;
+              total?: number;
+              sourceText?: string;
+            };
+            if (chunk.error) throw new Error(chunk.error);
+            if (typeof chunk.index === "number") receivedIndexes.add(chunk.index);
+            if (typeof chunk.total === "number" && chunk.total > expectedTotal) {
+              expectedTotal = chunk.total;
+            }
+            const translatedChunk = (chunk.text || "").replace(/\s+$/g, "");
+            const chunkIndex = chunk.index ?? translatedChunks.length;
+            translatedChunks[chunkIndex] = translatedChunk;
+            onChunk?.(translatedChunk, chunkIndex, chunk.total ?? 0, chunk.sourceText);
+          }
+          if (done) break;
+        }
+
+        if (buffer.trim()) {
+          const chunk = JSON.parse(buffer) as { text?: string; error?: string; index?: number; total?: number; sourceText?: string };
+          if (chunk.error) throw new Error(chunk.error);
+          if (typeof chunk.index === "number") receivedIndexes.add(chunk.index);
+          if (typeof chunk.total === "number" && chunk.total > expectedTotal) {
+            expectedTotal = chunk.total;
+          }
+          const translatedChunk = (chunk.text || "").replace(/\s+$/g, "");
+          const chunkIndex = chunk.index ?? translatedChunks.length;
+          translatedChunks[chunkIndex] = translatedChunk;
+          onChunk?.(translatedChunk, chunkIndex, chunk.total ?? 0, chunk.sourceText);
+        }
+        if (expectedTotal > 0 && receivedIndexes.size !== expectedTotal) {
+          throw new Error(`Stream dịch bị thiếu đoạn (${receivedIndexes.size}/${expectedTotal})`);
+        }
+        return translatedChunks.join("\n\n");
       }
 
       const data = (await response.json()) as { translatedText?: string };
-
-      return data.translatedText || text;
+      return (data.translatedText || text)
+        .replace(/&#x20;|&#32;|&nbsp;/gi, " ")
+        .replace(/\s+$/g, "");
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         console.warn("Translation request timed out");
@@ -349,7 +447,7 @@ export default function useMangaTranslator() {
         console.error(error);
       }
 
-      return text;
+      throw error;
     }
   };
 
@@ -1318,22 +1416,49 @@ export default function useMangaTranslator() {
     loadImages(droppedFiles);
   };
 
-  const handleTranslateText = async () => {
-    if (!textInput.trim()) return;
+  const handleTranslateText = async (textOverride?: string) => {
+    const textToTranslate = textOverride ?? textInput;
+    if (!textToTranslate.trim()) return;
+    let latestProgressiveText = textToTranslate;
 
     try {
       setIsTranslatingText(true);
+      setTextTranslationError(null);
+      setTextTranslationProgress({ completed: 0, total: 0 });
+      setTextOutput(textToTranslate);
+      const translatedBySource = new Map<string, string>();
 
       const translated = await translateText(
-        textInput,
+        textToTranslate,
         textTargetLanguage,
         textSourceLanguage,
+        (chunk, index, total, sourceChunk) => {
+          setTextTranslationProgress((current) => ({
+            completed: Math.max(current.completed, index + 1),
+            total: total || current.total,
+          }));
+          if (sourceChunk) translatedBySource.set(sourceChunk, chunk);
+          let progressiveText = textToTranslate;
+          for (const [sourceText, translatedText] of translatedBySource) {
+            progressiveText = progressiveText.split(sourceText).join(translatedText);
+          }
+          latestProgressiveText = progressiveText;
+          setTextOutput(progressiveText);
+        },
       );
 
-      setTextOutput(translated);
+      // Không dùng danh sách chunk làm kết quả cuối: nếu provider trả thiếu
+      // một phần thì join() sẽ ghi đè mất phần gốc chưa dịch.
+      setTextOutput(
+        latestProgressiveText !== textToTranslate
+          ? latestProgressiveText
+          : translated,
+      );
     } catch (error) {
       console.error(error);
-      setTextOutput("Translation failed.");
+      // Giữ nguyên các đoạn đã dịch và phần gốc chưa dịch khi stream bị ngắt.
+      setTextOutput(latestProgressiveText);
+      setTextTranslationError(error instanceof Error ? error.message : "Dịch văn bản thất bại.");
     } finally {
       setIsTranslatingText(false);
     }
@@ -2037,6 +2162,10 @@ export default function useMangaTranslator() {
     startResizeSelection,
     textInput,
     textOutput,
+    textTranslationError,
+    setTextTranslationError,
+    textTranslationProgress,
+    setTextOutput,
     textSourceLanguage,
     textTargetLanguage,
     isTranslatingText,

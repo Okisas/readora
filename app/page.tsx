@@ -14,6 +14,8 @@ import {
 } from 'lucide-react'
 import PreviewCanvas from '@/components/PreviewCanvas'
 import TextTranslatePanel from '@/components/TextTranslatePanel'
+import TranslationHistory, { type TranslationHistoryItem } from '@/components/TranslationHistory'
+import TranslationGlossaryManager, { type TranslationGlossary } from '@/components/TranslationGlossary'
 import UploadPanel from '@/components/UploadPanel'
 import useMangaTranslator from '@/components/useMangaTranslator'
 
@@ -55,7 +57,9 @@ export default function HomePage() {
     startResizeSelection,
     textInput,
     textOutput,
-    textSourceLanguage,
+    textTranslationError,
+    textTranslationProgress,
+    setTextOutput,
     textTargetLanguage,
     isTranslatingText,
     handleTranslateText,
@@ -68,7 +72,6 @@ export default function HomePage() {
     setSourceLanguage,
     setTargetLanguage,
     setTextInput,
-    setTextSourceLanguage,
     setTextTargetLanguage,
     translatorMode,
     setTranslatorMode,
@@ -87,6 +90,39 @@ export default function HomePage() {
   const [textUrl, setTextUrl] = useState('')
   const [textChapterTitle, setTextChapterTitle] = useState('')
   const [isFetchingTextUrl, setIsFetchingTextUrl] = useState(false)
+  const [translationHistory, setTranslationHistory] = useState<TranslationHistoryItem[]>(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const saved = JSON.parse(window.localStorage.getItem('readora-translation-history') || '[]')
+      return Array.isArray(saved) ? saved.map((item, index) => ({
+        ...item,
+        id: typeof item.id === 'number' ? item.id : index + 1,
+        edits: Array.isArray(item.edits) ? item.edits : [],
+      })) : []
+    } catch {
+      return []
+    }
+  })
+  const [activeHistoryId, setActiveHistoryId] = useState<number | null>(null)
+  const [translationGlossary, setTranslationGlossary] = useState<TranslationGlossary>(() => {
+    if (typeof window === 'undefined') return {}
+    try {
+      return JSON.parse(window.localStorage.getItem('readora-translation-glossary') || '{}')
+    } catch {
+      return {}
+    }
+  })
+  const glossaryApplyGuardRef = useRef<string | null>(null)
+  const glossaryBaseTextRef = useRef('')
+  const lastGlossaryOutputRef = useRef('')
+
+  const applyGlossaryToText = (text: string, entries: TranslationGlossary) => {
+    let result = text
+    for (const [source, replacement] of Object.entries(entries)) {
+      if (source.trim() && replacement.trim()) result = result.split(source).join(replacement)
+    }
+    return result
+  }
 
   const webtoonChapter = (() => {
     try {
@@ -145,6 +181,102 @@ export default function HomePage() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem('readora-translation-history', JSON.stringify(translationHistory))
+  }, [translationHistory])
+
+  useEffect(() => {
+    window.localStorage.setItem('readora-translation-glossary', JSON.stringify(translationGlossary))
+  }, [translationGlossary])
+
+  useEffect(() => {
+    if (!textOutput) {
+      glossaryBaseTextRef.current = ''
+      lastGlossaryOutputRef.current = ''
+      glossaryApplyGuardRef.current = null
+      return
+    }
+    const glossarySignature = JSON.stringify(translationGlossary)
+    const currentSignature = `${glossarySignature}\u0000${textOutput}`
+    if (glossaryApplyGuardRef.current === currentSignature) return
+    const wasGlossaryOutput = textOutput === lastGlossaryOutputRef.current
+    if (!wasGlossaryOutput) glossaryBaseTextRef.current = textOutput
+
+    if (Object.keys(translationGlossary).length === 0) {
+      lastGlossaryOutputRef.current = ''
+      if (wasGlossaryOutput && glossaryBaseTextRef.current !== textOutput) {
+        setTextOutput(glossaryBaseTextRef.current)
+      }
+      return
+    }
+
+    let nextText = glossaryBaseTextRef.current || textOutput
+    for (const [source, replacement] of Object.entries(translationGlossary)) {
+      if (source.trim() && replacement.trim()) nextText = nextText.split(source).join(replacement)
+    }
+    if (nextText !== textOutput) {
+      lastGlossaryOutputRef.current = nextText
+      glossaryApplyGuardRef.current = `${glossarySignature}\u0000${nextText}`
+      setTextOutput(nextText)
+    }
+  }, [textOutput, translationGlossary, setTextOutput])
+
+  useEffect(() => {
+    if (!activeHistoryId || isTranslatingText || !textOutput) return
+    setTranslationHistory((items) => items.map((item) => item.id === activeHistoryId
+      ? { ...item, translatedText: textOutput }
+      : item))
+  }, [activeHistoryId, isTranslatingText, textOutput])
+
+  const saveGlossary = (entries: TranslationGlossary) => {
+    const baseText = glossaryBaseTextRef.current || textOutput
+    const nextText = baseText ? applyGlossaryToText(baseText, entries) : textOutput
+    glossaryBaseTextRef.current = baseText
+    lastGlossaryOutputRef.current = nextText
+    glossaryApplyGuardRef.current = null
+    setTranslationGlossary(entries)
+    if (nextText !== textOutput) setTextOutput(nextText)
+    if (!activeHistoryId) return
+    const edits = Object.entries(entries).map(([source, replacement]) => ({ source, replacement }))
+    setTranslationHistory((items) => items.map((item) => item.id === activeHistoryId ? { ...item, edits } : item))
+  }
+
+  const clearGlossary = () => saveGlossary({})
+
+  const addGlossaryEntry = (source: string, replacement: string) => {
+    if (!source.trim() || !replacement.trim()) return
+    const next = { ...translationGlossary, [source.trim()]: replacement.trim() }
+    saveGlossary(next)
+  }
+
+  const deleteTranslationHistory = (id: number) => {
+    setTranslationHistory((items) => items.filter((item) => item.id !== id))
+    if (activeHistoryId !== id) return
+    setActiveHistoryId(null)
+    setTranslationGlossary({})
+    setTextUrl('')
+    setTextChapterTitle('')
+    setTextInput('')
+    setTextOutput('')
+    setTranslatorMode('history')
+  }
+
+  const clearTranslationHistory = () => {
+    setTranslationHistory([])
+    setActiveHistoryId(null)
+    setTranslationGlossary({})
+    setTextUrl('')
+    setTextChapterTitle('')
+    setTextInput('')
+    setTextOutput('')
+  }
+
+  useEffect(() => {
+    if (textTranslationError) {
+      showToast(textTranslationError, 'error')
+    }
+  }, [textTranslationError])
 
   const closeGuide = () => {
     setIsGuideOpen(false)
@@ -296,14 +428,37 @@ export default function HomePage() {
       }
 
       setTextChapterTitle(data.title || `Nội dung từ ${data.site}`)
-      setTextInput(data.content)
-      showToast(`Đã lấy nội dung từ ${data.site}`, 'success')
+      const cleanContent = data.content
+          .replace(/&#x20;|&#32;|&nbsp;/gi, ' ')
+          .replace(/\s+$/g, '')
+      setTextInput(cleanContent)
+      setTextOutput('')
+      const historyItem: TranslationHistoryItem = {
+        id: translationHistory.reduce((max, item) => Math.max(max, item.id), 0) + 1,
+        url: textUrl.trim(),
+        title: data.title || `Nội dung từ ${data.site}`,
+        originalText: cleanContent,
+        translatedText: '',
+        createdAt: new Date().toISOString(),
+        edits: [],
+      }
+      setTranslationHistory((items) => [historyItem, ...items].slice(0, 30))
+      setActiveHistoryId(historyItem.id)
+      setTranslationGlossary({})
+      setTranslatorMode('text')
+      setIsFetchingTextUrl(false)
+      await handleTranslateText(cleanContent)
     } catch (error) {
       console.error('Text chapter fetch error:', error)
       showToast('Lỗi kết nối server. Vui lòng thử lại.', 'error')
     } finally {
       setIsFetchingTextUrl(false)
     }
+  }
+
+  const handleTranslateOnly = async () => {
+    if (!textInput.trim()) return
+    await handleTranslateText(textInput)
   }
 
   return (
@@ -461,10 +616,33 @@ export default function HomePage() {
               >
                 Văn bản
               </button>
+              <button
+                type="button"
+                onClick={() => setTranslatorMode('history')}
+                className={`flex-1 rounded-full px-5 py-2 text-sm font-semibold sm:flex-none ${translatorMode === 'history' ? (theme === 'dark' ? 'bg-white text-black' : 'bg-zinc-900 text-white') : (theme === 'dark' ? 'text-zinc-300' : 'text-zinc-700')}`}
+              >
+                Lịch sử
+              </button>
             </div>
           </div>
 
-          {translatorMode === 'image' ? (
+          {translatorMode === 'history' ? (
+            <TranslationHistory
+              items={translationHistory}
+              theme={theme}
+              onDelete={deleteTranslationHistory}
+              onClearAll={clearTranslationHistory}
+              onSelect={(item) => {
+                setTextUrl(item.url)
+                setTextChapterTitle(item.title)
+                setTextInput(item.originalText)
+                setTextOutput(item.translatedText || item.originalText)
+                setActiveHistoryId(item.id)
+                setTranslationGlossary(Object.fromEntries(item.edits.map((edit) => [edit.source, edit.replacement])))
+                setTranslatorMode('text')
+              }}
+            />
+          ) : translatorMode === 'image' ? (
             <div className="grid items-start gap-6 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[360px_minmax(0,1fr)] xl:gap-8">
               <div className="min-w-0 w-full space-y-4">
                 {/* Phần nhập URL */}
@@ -617,8 +795,13 @@ export default function HomePage() {
             <TextTranslatePanel
               inputText={textInput}
               outputText={textOutput}
+              onOutputChange={setTextOutput}
               isTranslating={isTranslatingText}
-              sourceLanguage={textSourceLanguage}
+              translationProgress={textTranslationProgress}
+              glossary={translationGlossary}
+              onGlossarySave={saveGlossary}
+              onGlossaryClear={clearGlossary}
+              onGlossaryAdd={addGlossaryEntry}
               targetLanguage={textTargetLanguage}
               theme={theme}
               textUrl={textUrl}
@@ -626,9 +809,8 @@ export default function HomePage() {
               isFetchingUrl={isFetchingTextUrl}
               onTextUrlChange={setTextUrl}
               onFetchUrl={handleFetchTextFromUrl}
-              onSourceLanguageChange={setTextSourceLanguage}
               onTargetLanguageChange={setTextTargetLanguage}
-              onTranslate={handleTranslateText}
+              onTranslate={handleTranslateOnly}
             />
           )}
         </div>
@@ -732,11 +914,15 @@ export default function HomePage() {
             </div>
           )}
 
+          <div className="flex items-center justify-end gap-3">
+          {activeHistoryId !== null && (
+            <TranslationGlossaryManager entries={translationGlossary} theme={theme} onSave={saveGlossary} onClear={clearGlossary} />
+          )}
           <button
             type="button"
             onClick={() => setIsGuideOpen((open) => !open)}
             aria-label="Mở hướng dẫn sử dụng"
-            className={`ml-auto flex h-12 w-12 items-center justify-center rounded-full shadow-xl transition hover:scale-105 ${
+            className={`flex h-12 w-12 items-center justify-center rounded-full shadow-xl transition hover:scale-105 ${
               theme === 'dark'
                 ? 'bg-white text-black hover:bg-zinc-200'
                 : 'bg-zinc-900 text-white hover:bg-zinc-800'
@@ -744,6 +930,7 @@ export default function HomePage() {
           >
             <MessageCircle className="h-5 w-5" />
           </button>
+          </div>
         </div>
       )}
 

@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { translateGoogleWeb, translateLibreFirst } from "@/lib/googleTranslate";
 
 export const runtime = "nodejs";
 
-const MAX_CHUNK_LENGTH = 450;
-
+// Một request lớn hơn giúp tránh biến một chương dài thành hàng chục request.
+// Kết quả vẫn được stream theo từng batch để UI render dần.
+const MAX_CHUNK_LENGTH = 1000;
+const CHUNK_DELAY_MS = 800;
 const splitIntoChunks = (text: string) => {
   const paragraphs = text.split(/\n{2,}/);
   const chunks: string[] = [];
@@ -29,8 +32,12 @@ const splitIntoChunks = (text: string) => {
       current = "";
     }
 
-    for (let index = 0; index < value.length; index += MAX_CHUNK_LENGTH) {
-      chunks.push(value.slice(index, index + MAX_CHUNK_LENGTH));
+    for (let index = 0; index < value.length;) {
+      const end = Math.min(index + MAX_CHUNK_LENGTH, value.length);
+      const boundary = end < value.length ? value.lastIndexOf(" ", end) : end;
+      const splitAt = boundary > index + 80 ? boundary : end;
+      chunks.push(value.slice(index, splitAt).trim());
+      index = splitAt;
     }
   }
 
@@ -43,62 +50,22 @@ const translateChunk = async (
   source: string,
   target: string,
 ) => {
-  const translateUrl =
-    "https://translate.google.com/translate_a/single?client=gtx&sl=" +
-    encodeURIComponent(source) +
-    "&tl=" +
-    encodeURIComponent(target) +
-    "&dt=t&q=" +
-    encodeURIComponent(text);
-
   try {
-    const response = await fetch(translateUrl, {
-      headers: {
-        Accept: "application/json",
-        "User-Agent": "Mozilla/5.0",
-      },
-      cache: "no-store",
-    });
-
-    if (response.ok) {
-      const data = (await response.json()) as Array<
-        Array<[string | null, string | null]>
-      >;
-      const translatedText = Array.isArray(data[0])
-        ? data[0].map((item) => item?.[0] || "").join("")
-        : "";
-      if (translatedText) return { text: translatedText, provider: "google" };
-    }
+    return await translateLibreFirst(text, source, target);
   } catch (error) {
-    console.warn("Google translation unavailable:", error);
-  }
-
-  try {
-    const fallbackUrl =
-      "https://api.mymemory.translated.net/get?q=" +
-      encodeURIComponent(text) +
-      "&langpair=" +
-      encodeURIComponent(`${source}|${target}`);
-    const response = await fetch(fallbackUrl, {
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    });
-
-    if (response.ok) {
-      const data = (await response.json()) as {
-        responseData?: { translatedText?: string };
-        responseStatus?: number;
-      };
-      const translatedText = data.responseData?.translatedText?.trim();
-      if (translatedText && data.responseStatus === 200) {
-        return { text: translatedText, provider: "mymemory" };
-      }
+    const status = (error as { status?: number; statusCode?: number }).status ??
+      (error as { statusCode?: number }).statusCode;
+    if (status !== 429) {
+      console.warn(`Google translation unavailable${status ? ` (${status})` : ""}; keeping original chunk`);
     }
-  } catch (error) {
-    console.warn("Fallback translation unavailable:", error);
+    return {
+      text,
+      provider: status === 429 ? "rate-limited" : "original",
+      error: status === 429
+        ? "Google Translate đang giới hạn IP. Vui lòng thử lại sau khoảng 1 phút."
+        : "Không dịch được đoạn văn này.",
+    };
   }
-
-  return { text, provider: "original" };
 };
 
 export async function POST(request: NextRequest) {
@@ -113,23 +80,106 @@ export async function POST(request: NextRequest) {
     }
 
     const chunks = splitIntoChunks(text);
-    const translatedChunks: string[] = [];
-    const providers = new Set<string>();
+    const encoder = new TextEncoder();
+    const firstResult = await translateChunk(
+      chunks[0],
+      String(source),
+      String(target),
+    );
 
-    // Dịch tuần tự để tránh bị dịch vụ miễn phí giới hạn request liên tiếp.
-    for (const chunk of chunks) {
-      const result = await translateChunk(
-        chunk,
-        String(source),
-        String(target),
+    // Không mở stream 200 nếu provider đã thất bại ngay từ request đầu tiên.
+    if (!['google-translate-web', 'libretranslate'].includes(firstResult.provider)) {
+      const status = firstResult.provider === "rate-limited" ? 429 : 502;
+      return NextResponse.json(
+        {
+          error:
+            status === 429
+              ? "Google Translate đang giới hạn IP. Vui lòng thử lại sau khoảng 1 phút."
+              : "Google Translate không trả về bản dịch.",
+          provider: firstResult.provider,
+        },
+        { status },
       );
-      translatedChunks.push(result.text);
-      providers.add(result.provider);
     }
 
-    return NextResponse.json({
-      translatedText: translatedChunks.join("\n\n"),
-      provider: Array.from(providers).join("+") || "original",
+    // Gửi NDJSON từng chunk để client có thể render ngay khi một đoạn xong.
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          for (let index = 0; index < chunks.length; index += 1) {
+            const result = index === 0
+              ? firstResult
+              : await translateChunk(chunks[index], String(source), String(target));
+            if (!["google-translate-web", "libretranslate"].includes(result.provider)) {
+              controller.enqueue(
+                encoder.encode(
+                  JSON.stringify({
+                    error: "error" in result
+                      ? result.error
+                      : "Không dịch được đoạn văn này.",
+                    provider: result.provider,
+                    sourceText: chunks[index],
+                    index,
+                    total: chunks.length,
+                  }) + "\n",
+                ),
+              );
+              controller.close();
+              return;
+            }
+            controller.enqueue(
+              encoder.encode(
+                JSON.stringify({
+                  ...result,
+                  sourceText: chunks[index],
+                  index,
+                  total: chunks.length,
+                }) + "\n",
+              ),
+            );
+
+            // LibreTranslate đã tạo bản đầy đủ trước. Google chỉ sửa lại
+            // cùng chunk; nếu Google bị chặn thì giữ nguyên bản Libre.
+            if (result.provider === "libretranslate") {
+              try {
+                const refined = await translateGoogleWeb(
+                  chunks[index],
+                  String(source),
+                  String(target),
+                );
+                if (refined.text !== result.text) {
+                  controller.enqueue(
+                    encoder.encode(
+                      JSON.stringify({
+                        ...refined,
+                        sourceText: chunks[index],
+                        index,
+                        total: chunks.length,
+                      }) + "\n",
+                    ),
+                  );
+                }
+              } catch (error) {
+                console.warn(`Google refinement unavailable for chunk ${index}; keeping LibreTranslate`, error);
+              }
+            }
+            if (index < chunks.length - 1) {
+              await new Promise((resolve) => setTimeout(resolve, CHUNK_DELAY_MS));
+            }
+          }
+          controller.close();
+        } catch (error) {
+          controller.error(error);
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "application/x-ndjson; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+      },
     });
   } catch (error) {
     console.error("Text translation error:", error);

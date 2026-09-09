@@ -42,3 +42,8 @@ next-env.d.ts
 
 .vercel
 .env*.local
+/data/translation-memory.json
+/.venv-libretranslate/
+/.libretranslate-data/
+/.libretranslate-config/
+/.libretranslate-cache/

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 type Option = {
   disabled?: boolean
@@ -10,10 +10,10 @@ type Option = {
 
 type LanguageSelectorProps = {
   label: string
-  options: Option[]
+  options?: Option[]
   theme?: 'dark' | 'light'
-  value: string
-  onChange: (value: string) => void
+  value?: string
+  onChange?: (value: string) => void
 }
 
 const countryCodes: Record<string, string> = {
@@ -48,6 +48,20 @@ export default function LanguageSelector({
   onChange,
 }: LanguageSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isOpen])
+
+  if (!options || !onChange) return null
+
   const selected = options.find((option) => option.value === value) ?? options[0]
 
   const code = (option?: Option) =>
@@ -85,7 +99,7 @@ export default function LanguageSelector({
 
       {isOpen && (
         <div
-          className={`absolute inset-x-0 top-full z-50 mt-2 max-h-72 overflow-y-auto rounded-2xl border p-1 shadow-2xl ${
+          className={`absolute inset-x-0 top-full z-50 mt-2 max-h-[min(18rem,calc(100dvh-8rem))] overflow-y-auto overscroll-contain rounded-2xl border p-1 shadow-2xl ${
             theme === 'dark'
               ? 'border-zinc-700 bg-zinc-900'
               : 'border-zinc-200 bg-white'
