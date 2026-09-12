@@ -12,6 +12,41 @@ const fetchMangaDexChapterImages = async (chapterUrl: string) => {
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
     );
+    const chapterId = new URL(chapterUrl).pathname.match(
+      /\/chapter\/([0-9a-f-]{36})(?:\/|$)/i,
+    )?.[1];
+    if (!chapterId) throw new Error("Không tìm thấy mã chapter MangaDex");
+
+    // Mở endpoint bằng Chromium thay vì trang chapter. Trang chapter thường
+    // bị MangaDex đóng kết nối với headless browser, còn endpoint trả JSON ổn
+    // định hơn và không cần cuộn/lazy-load.
+    const apiResponse = await page.goto(
+      `https://api.mangadex.org/at-home/server/${chapterId}`,
+      {
+        waitUntil: "domcontentloaded",
+        timeout: 45_000,
+      },
+    );
+    if (!apiResponse || !apiResponse.ok()) {
+      throw new Error(`MangaDex API lỗi (${apiResponse?.status() ?? "không phản hồi"})`);
+    }
+
+    const apiData = await apiResponse.json() as {
+      baseUrl?: string;
+      chapter?: { hash?: string; data?: string[] };
+    };
+    const baseUrl = apiData.baseUrl;
+    const hash = apiData.chapter?.hash;
+    const pages = apiData.chapter?.data;
+    if (!baseUrl || !hash || !pages?.length) {
+      throw new Error("MangaDex không trả về danh sách trang");
+    }
+
+    const imageUrls = pages.map(
+      (pageName) => `${baseUrl}/data/${hash}/${encodeURIComponent(pageName)}`,
+    );
+
+    /*
     await page.goto(chapterUrl, {
       waitUntil: "domcontentloaded",
       timeout: 45_000,
@@ -47,6 +82,7 @@ const fetchMangaDexChapterImages = async (chapterUrl: string) => {
       });
       return [...urls];
     });
+    */
 
     const images = [];
     for (const imageUrl of imageUrls) {
