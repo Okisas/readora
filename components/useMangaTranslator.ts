@@ -18,9 +18,14 @@ import {
   normalizeTextForTranslation,
   preprocessCanvas,
   preprocessForFullPageManga,
+  recognizeWithLayout,
+  mergeOCRLines,
+  cleanGroupedOCRText,
+  sortOCRLinesMangaOrder,
   removeBackgroundFromCanvas,
   reorderVerticalLines,
 } from "@/components/ocrUtils";
+import { detectComicText } from '@/components/comicTextDetector';
 import type {
   OCRCandidate,
   OCRLine,
@@ -30,6 +35,7 @@ import type {
 } from "@/components/types";
 import { translateFromBrowser } from "@/components/clientGoogleTranslate";
 import { translateWithChromeBuiltIn } from "@/components/clientChromeTranslator";
+import { LensCore } from '@rxliuli/chrome-lens-ocr/core';
 
 const STORAGE_KEY = "manga-translations-v1";
 const MIN_SELECTION_SIZE = 48;
@@ -70,6 +76,10 @@ export default function useMangaTranslator() {
   const [ocrText, setOcrText] = useState("");
 
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // OCR preview settings. The scan is intentionally separate from translation
+  // so the raw recognition can be checked in the browser console first.
+  const [ocrChunkHeight, setOcrChunkHeight] = useState(800);
 
   const [selection, setSelection] = useState<SelectionRect>({
     x: 0,
@@ -699,7 +709,7 @@ export default function useMangaTranslator() {
     }
   };
 
-  const scanEntireImage = async () => {
+  const legacyScanEntireImage = async () => {
     try {
       if (!currentImage || !imageRef.current) return;
 
@@ -1650,6 +1660,524 @@ export default function useMangaTranslator() {
     };
   };
 
+  const scanEntireImage = async () => {
+    try {
+      if (!currentImage || !imageRef.current) return;
+
+      const originalImage = imageRef.current;
+      const chunkHeight = Math.max(400, Math.min(6000, Math.round(ocrChunkHeight)));
+      const overlap = Math.min(120, Math.round(chunkHeight * 0.08));
+      const recognitionLanguages = getRecognitionLanguages(sourceLanguage);
+      const chunks: Array<{
+        chunk: number;
+        y: number;
+        height: number;
+        language: string;
+        confidence: number;
+        text: string;
+        lines: Array<{ text: string; bbox?: OCRLine['bbox'] }>;
+      }> = [];
+
+      setIsProcessing(true);
+      setOcrText(`Đang quét OCR theo vùng cao ${chunkHeight}px...`);
+      console.groupCollapsed(
+        `[Readora OCR] ${currentImage.id} | source=${sourceLanguage} | chunkHeight=${chunkHeight}px`,
+      );
+      console.info('OCR model: Tesseract.js multi-pass (sparse + auto + single-block, grouped by bbox)');
+
+      // Detect the whole page once. Chunking is only for scheduling OCR work;
+      // running the 1024px ONNX detector once per chunk made long pages slow.
+      let pageDetections: Awaited<ReturnType<typeof detectComicText>> = [];
+      try {
+        const detectionCanvas = document.createElement('canvas');
+        detectionCanvas.width = originalImage.width;
+        detectionCanvas.height = originalImage.height;
+        detectionCanvas.getContext('2d')?.drawImage(originalImage, 0, 0);
+        pageDetections = await detectComicText(detectionCanvas);
+        console.info(`[ComicTextDetector] page: ${pageDetections.length} boxes`);
+      } catch (detectorError) {
+        console.warn('[ComicTextDetector] page detection failed; using Tesseract fallback', detectorError);
+      }
+
+      for (let y = 0, chunkIndex = 1; y < originalImage.height; chunkIndex += 1) {
+        const sourceHeight = Math.min(chunkHeight, originalImage.height - y);
+        const sourceCanvas = document.createElement('canvas');
+        sourceCanvas.width = originalImage.width;
+        sourceCanvas.height = sourceHeight;
+        const sourceContext = sourceCanvas.getContext('2d');
+        if (!sourceContext) break;
+        sourceContext.drawImage(
+          originalImage,
+          0,
+          y,
+          originalImage.width,
+          sourceHeight,
+          0,
+          0,
+          sourceCanvas.width,
+          sourceCanvas.height,
+        );
+
+        const preparedCanvas = preprocessForFullPageManga(sourceCanvas);
+        const rawCanvas = document.createElement('canvas');
+        rawCanvas.width = Math.round(sourceCanvas.width * 1.9);
+        rawCanvas.height = Math.round(sourceCanvas.height * 1.9);
+        const rawContext = rawCanvas.getContext('2d');
+        if (!rawContext) break;
+        rawContext.imageSmoothingEnabled = true;
+        rawContext.imageSmoothingQuality = 'high';
+        rawContext.drawImage(sourceCanvas, 0, 0, rawCanvas.width, rawCanvas.height);
+        const binaryCanvas = preprocessCanvas(rawCanvas);
+        const candidates: OCRCandidate[] = [];
+        const resultByLabel = new Map<string, { lines: OCRLine[]; confidence: number }>();
+        let usedComicDetector = false;
+
+        // ComicTextDetector finds speech/text regions first. OCR each crop as
+        // one block so neighbouring panels cannot be merged together.
+        try {
+          const detectedBoxes = pageDetections
+            .filter((box) => box.y < y + sourceHeight && box.y + box.height > y)
+            .map((box) => ({ ...box, y: box.y - y }));
+          console.info(`[ComicTextDetector] chunk ${chunkIndex}: ${detectedBoxes.length} boxes`);
+          console.table(detectedBoxes);
+          const detectorLanguage = recognitionLanguages[0] ?? sourceLanguage;
+          const detectorLines: OCRLine[] = [];
+          let detectorConfidence = 0;
+          for (const box of detectedBoxes.slice(0, 8)) {
+            const padding = 10;
+            const crop = extractCanvasRegion(sourceCanvas, {
+              x: Math.max(0, box.x - padding),
+              y: Math.max(0, box.y - padding),
+              width: Math.min(sourceCanvas.width - Math.max(0, box.x - padding), box.width + padding * 2),
+              height: Math.min(sourceCanvas.height - Math.max(0, box.y - padding), box.height + padding * 2),
+            });
+            const enlarged = document.createElement('canvas');
+            enlarged.width = crop.width * 3;
+            enlarged.height = crop.height * 3;
+            enlarged.getContext('2d')?.drawImage(crop, 0, 0, enlarged.width, enlarged.height);
+            const result = await recognizeWithLayout(enlarged, detectorLanguage, Tesseract.PSM.SINGLE_BLOCK);
+            const text = cleanGroupedOCRText(result.data.text ?? '');
+            if (!text) continue;
+            const confidence = result.data.confidence ?? 0;
+            detectorConfidence += confidence;
+            detectorLines.push({
+              text,
+              bbox: {
+                x0: box.x * 1.9,
+                y0: box.y * 1.9,
+                x1: (box.x + box.width) * 1.9,
+                y1: (box.y + box.height) * 1.9,
+              },
+            });
+          }
+          if (detectorLines.length > 0) {
+            usedComicDetector = true;
+            const detectorText = cleanGroupedOCRText(
+              detectorLines.map((line) => line.text).join('\n'),
+            );
+            candidates.push({
+              cleanedText: detectorText,
+              textForTranslation: detectorText,
+              confidence: detectorConfidence / detectorLines.length,
+              score: detectorConfidence / detectorLines.length + Math.min(detectorText.length, 600) * 0.08,
+              label: `${detectorLanguage}:detector`,
+              scriptRatio: 1,
+              languageFamily: getLanguageFamily(detectorLanguage),
+            });
+            resultByLabel.set(`${detectorLanguage}:detector`, {
+              lines: detectorLines,
+              confidence: detectorConfidence / detectorLines.length,
+            });
+          }
+        } catch (detectorError) {
+          console.warn('[ComicTextDetector] unavailable; using Tesseract fallback', detectorError);
+        }
+
+        if (!usedComicDetector) for (const language of recognitionLanguages) {
+          for (const [variant, canvas] of [
+            ['raw', rawCanvas],
+            ['processed', preparedCanvas],
+            ['binary', binaryCanvas],
+          ] as const) {
+            for (const [mode, pageSegMode] of [
+              ['sparse', Tesseract.PSM.SPARSE_TEXT],
+              ['auto', Tesseract.PSM.AUTO],
+              ['block', Tesseract.PSM.SINGLE_BLOCK],
+            ] as const) {
+            const result = await recognizeWithLayout(
+              canvas,
+              language,
+              pageSegMode,
+            );
+
+            // Tesseract.js v7 may omit `lines`; blocks/words still contain boxes.
+            const lines = (result.data.blocks ?? []).flatMap((block) =>
+              block.paragraphs?.flatMap((paragraph) => paragraph.lines ?? []) ??
+              [{ text: block.text ?? '', bbox: block.bbox }],
+            ).filter((line) => line.text.trim());
+            const fallbackLines = lines.length > 0
+              ? lines
+              : (result.data.blocks ?? []).flatMap((block) =>
+                  block.paragraphs?.flatMap((paragraph) =>
+                    paragraph.lines?.flatMap((line) => line.words ?? []) ?? [],
+                  ) ?? [],
+                ).filter((word) => word.text.trim());
+            const groupedLines = mergeOCRLines(fallbackLines);
+            const linesForRecognition = sortOCRLinesMangaOrder(
+              groupedLines.length > 0 ? groupedLines : fallbackLines,
+            ).map((line) => ({
+              ...line,
+              text: cleanGroupedOCRText(line.text),
+            }));
+            const family = getLanguageFamily(language);
+            const rawText = reorderVerticalLines(linesForRecognition, family) || result.data.text;
+            const cleanedText = cleanOCRText(rawText);
+            const textForTranslation = normalizeTextForTranslation(cleanedText, family);
+            if (!textForTranslation) continue;
+            const confidence = result.data.confidence ?? 0;
+            const { japaneseRatio, koreanRatio, hanRatio } = getScriptStats(textForTranslation);
+            const scriptRatio = family === 'jpn' ? japaneseRatio : family === 'kor' ? koreanRatio : family === 'chi_sim' ? hanRatio : 1;
+            const label = `${language}:${variant}:${mode}`;
+            candidates.push({
+              cleanedText,
+              textForTranslation,
+              confidence,
+              // A high confidence result can still contain only one bubble.
+              // Add a small coverage bonus so the full-page candidate is not
+              // discarded merely because it recognized fewer characters.
+              score:
+                getOCRScore(textForTranslation, confidence, language) +
+                Math.min(textForTranslation.length, 600) * 0.08,
+              label,
+              scriptRatio,
+              languageFamily: family,
+            });
+            resultByLabel.set(label, { lines: linesForRecognition, confidence });
+            }
+          }
+        }
+
+        const best = chooseBestCandidate(candidates, sourceLanguage);
+        if (best) {
+          const scanResult = resultByLabel.get(best.label);
+          const variantScale = best.label.endsWith(':raw') ? 1.9 : 1.9;
+          const lines = (scanResult?.lines ?? []).map((line) => ({
+            ...line,
+            bbox: line.bbox
+              ? {
+                  x0: line.bbox.x0 / variantScale,
+                  y0: line.bbox.y0 / variantScale + y,
+                  x1: line.bbox.x1 / variantScale,
+                  y1: line.bbox.y1 / variantScale + y,
+                }
+              : undefined,
+          }));
+          const item = {
+            chunk: chunkIndex,
+            y,
+            height: sourceHeight,
+            language: best.label.split(':')[0],
+            confidence: best.confidence,
+            text: best.cleanedText,
+            lines,
+          };
+          chunks.push(item);
+          console.group(`[OCR chunk ${chunkIndex}] y=${y}-${y + sourceHeight}`);
+          console.info('language:', item.language, 'confidence:', item.confidence);
+          console.info('text:', item.text || '(empty)');
+          console.table(lines.map((line) => ({ text: line.text, ...line.bbox })));
+          console.groupEnd();
+        } else {
+          console.info(`[OCR chunk ${chunkIndex}] y=${y}-${y + sourceHeight}: no text`);
+        }
+
+        setOcrText(`Đã quét ${Math.min(originalImage.height, y + sourceHeight)}/${originalImage.height}px — tìm thấy ${chunks.length} vùng có chữ.`);
+        if (y + sourceHeight >= originalImage.height) break;
+        y += Math.max(1, sourceHeight - overlap);
+      }
+
+      console.info('[Readora OCR] complete', chunks);
+      try {
+        await fetch('/api/ocr-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageId: currentImage.id,
+            sourceLanguage,
+            chunkHeight,
+            chunks,
+          }),
+        });
+      } catch (logError) {
+        console.error('[Readora OCR] could not send server log', logError);
+      }
+      console.groupEnd();
+      setOcrText(
+        chunks.length
+          ? `OCR xong: ${chunks.length} vùng. Kết quả thô đã được ghi trong Console (F12). Chưa dịch.`
+          : 'OCR xong nhưng chưa tìm thấy chữ. Kết quả chi tiết đã ghi trong Console (F12).',
+      );
+    } catch (error) {
+      console.error('[Readora OCR] failed', error);
+      setOcrText('OCR thất bại. Xem lỗi trong Console (F12).');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const testRapidOCR = async (useComicDetector = false, useOllama = false) => {
+    if (!currentImage) return;
+    const totalStarted = performance.now();
+    try {
+      setIsProcessing(true);
+      const response = await fetch(currentImage.url);
+      const blob = await response.blob();
+      const imageBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(reader.error ?? new Error('Không đọc được ảnh'));
+        reader.readAsDataURL(blob);
+      });
+      let detectorBoxes: Awaited<ReturnType<typeof detectComicText>> = [];
+      const detectorStarted = performance.now();
+      if (useComicDetector && imageRef.current) {
+        const isolated = Boolean((navigator as Navigator & { crossOriginIsolated?: boolean }).crossOriginIsolated);
+        if (!isolated) {
+          console.warn('[ComicTextDetector] browser is not cross-origin isolated; skipping detector immediately');
+        } else {
+        try {
+          const detectionCanvas = document.createElement('canvas');
+          detectionCanvas.width = imageRef.current.naturalWidth || imageRef.current.width || 1;
+          detectionCanvas.height = imageRef.current.naturalHeight || imageRef.current.height || 1;
+          detectionCanvas.getContext('2d')?.drawImage(imageRef.current, 0, 0);
+          detectorBoxes = await Promise.race([
+            detectComicText(detectionCanvas),
+            new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error('timeout 15s')), 15_000)),
+          ]);
+        } catch (detectorError) {
+          console.warn('[ComicTextDetector] skipped:', detectorError);
+        }
+        }
+      }
+      const detectorMs = Math.round(performance.now() - detectorStarted);
+      const requestStarted = performance.now();
+      const result = await fetch('/api/rapid-ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64, boxes: detectorBoxes }),
+      });
+      const data = await result.json();
+      if (!result.ok) throw new Error(data.error || `RapidOCR lỗi (${result.status})`);
+      const requestMs = Math.round(performance.now() - requestStarted);
+      const totalMs = Math.round(performance.now() - totalStarted);
+      const rapidRows = (data.results ?? []) as Array<{
+        text: string;
+        raw_text?: string;
+        confidence: number;
+        bbox: Array<[number, number]>;
+      }>;
+      const words = rapidRows.filter((item) => item.confidence >= 0.7);
+      // Do not merge by Y: words from separate manga panels often share the
+      // same row and would otherwise become one giant, incorrect bounding box.
+      const mergedRows = words.slice().sort((a, b) => {
+        const yDiff = a.bbox[0][1] - b.bbox[0][1];
+        return Math.abs(yDiff) > 50 ? yDiff : b.bbox[0][0] - a.bbox[0][0];
+      });
+      if (useOllama) {
+        const ollamaResponse = await fetch('/api/ollama-ocr', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64, results: mergedRows }),
+        });
+        const ollamaData = await ollamaResponse.json();
+        if (!ollamaResponse.ok) throw new Error(ollamaData.error || `Ollama lỗi (${ollamaResponse.status})`);
+        console.group(`[Ollama OCR] ${currentImage.id}`);
+        console.info('model:', ollamaData.model, 'groups:', ollamaData.groups?.length ?? 0);
+        console.table(ollamaData.groups ?? []);
+        console.groupEnd();
+        setOcrText(`RapidOCR + Ollama xong: ${ollamaData.groups?.length ?? 0} nhóm. Xem Console (F12).`);
+        return;
+      }
+      console.group(`[RapidOCR] ${currentImage.id}`);
+      console.info('timings:', {
+        detector_ms: useComicDetector ? detectorMs : 0,
+        api_round_trip_ms: requestMs,
+        rapidocr_ms: data.elapsed_ms,
+        engine_ready_ms: data.timings?.engine_ready_ms,
+        recognition_ms: data.timings?.recognition_ms,
+        total_ms: totalMs,
+      });
+      console.info('count:', mergedRows.length);
+      console.table(mergedRows.map((item) => ({
+        text: item.text,
+        confidence: item.confidence,
+        bbox: JSON.stringify(item.bbox),
+      })));
+      console.groupEnd();
+      setOcrText(`RapidOCR xong: ${mergedRows.length} dòng trong ${totalMs}ms (OCR ${data.elapsed_ms}ms). Xem Console (F12).`);
+    } catch (error) {
+      console.error('[RapidOCR] failed:', error);
+      setOcrText(`RapidOCR thất bại: ${error instanceof Error ? error.message : 'lỗi không xác định'}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const testRapidOCRWithComicDetector = () => testRapidOCR(true);
+  const testRapidOCRWithOllama = async () => {
+    if (!currentImage || !imageRef.current) return;
+    const started = performance.now();
+    try {
+      setIsProcessing(true);
+      const response = await fetch(currentImage.url);
+      const blob = await response.blob();
+      const mime = (['image/jpeg', 'image/png', 'image/webp', 'image/bmp', 'image/tiff', 'image/heic', 'image/x-icon'] as string[]).includes(blob.type)
+        ? blob.type
+        : 'image/jpeg';
+      const data = new Uint8Array(await blob.arrayBuffer());
+      const image = imageRef.current;
+      const lens = new LensCore();
+      const sourceWidth = image.naturalWidth || image.width;
+      const sourceHeight = image.naturalHeight || image.height;
+      const lensMime = mime as Parameters<LensCore['scanByData']>[1];
+      const scanLensImage = async (bytes: Uint8Array, width: number, height: number, yOffset: number) => {
+        const chunk = await lens.scanByData(bytes, lensMime, [width, height]);
+        return {
+          language: chunk.language,
+          segments: chunk.segments.map((segment) => ({
+          ...segment,
+          boundingBox: {
+            ...segment.boundingBox,
+            pixelCoords: { ...segment.boundingBox.pixelCoords, y: segment.boundingBox.pixelCoords.y + yOffset },
+          },
+          })),
+        };
+      };
+      let segments = [] as Awaited<ReturnType<typeof scanLensImage>>['segments'];
+      let detectedLanguage = '';
+      if (sourceHeight > 1000 || sourceWidth > 1000) {
+        const scale = Math.min(1, 1000 / sourceWidth);
+        const chunkHeight = Math.max(200, Math.floor(1000 / scale));
+        const overlap = Math.min(40, Math.floor(chunkHeight * 0.05));
+        const chunkStep = Math.max(1, chunkHeight - overlap);
+        const totalChunks = Math.ceil(Math.max(1, sourceHeight - overlap) / chunkStep);
+        let chunkNumber = 0;
+        for (let y = 0; y < sourceHeight; y += Math.max(1, chunkHeight - overlap)) {
+          chunkNumber += 1;
+          setOcrText(`GG Lens: đang quét đoạn ${chunkNumber}/${totalChunks}...`);
+          const height = Math.min(chunkHeight, sourceHeight - y);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+          canvas.height = Math.max(1, Math.round(height * scale));
+          canvas.getContext('2d')?.drawImage(image, 0, y, sourceWidth, height, 0, 0, canvas.width, canvas.height);
+          const chunkBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.88));
+          if (!chunkBlob) continue;
+          const chunkResult = await scanLensImage(new Uint8Array(await chunkBlob.arrayBuffer()), sourceWidth, height, y);
+          segments.push(...chunkResult.segments);
+          if (!detectedLanguage) detectedLanguage = chunkResult.language;
+          if (y + height >= sourceHeight) break;
+        }
+      } else {
+        const single = await lens.scanByData(data, lensMime, [sourceWidth, sourceHeight]);
+        segments = single.segments;
+        detectedLanguage = single.language;
+      }
+      const result = { language: detectedLanguage, segments };
+      const cleanGGText = (text: string) => text
+        .replace(/[Υ]/g, 'Y').replace(/[Μ]/g, 'M').replace(/[Α]/g, 'A')
+        .replace(/[Β]/g, 'B').replace(/[Ε]/g, 'E').replace(/[Ο]/g, 'O')
+        .replace(/[Ρ]/g, 'P').replace(/[Τ]/g, 'T').replace(/[Χ]/g, 'X')
+        .replace(/\u03a5/g, 'Y').replace(/\u039c/g, 'M').replace(/\u0391/g, 'A')
+        .replace(/\u0392/g, 'B').replace(/\u0395/g, 'E').replace(/\u039f/g, 'O')
+        .replace(/\u03a1/g, 'P').replace(/\u03a4/g, 'T').replace(/\u03a7/g, 'X')
+        .replace(/\bYOY(\.\.\.)?/gi, 'YOU$1')
+        .replace(/\s+/g, ' ').trim();
+      const cleanedSegments = result.segments.map((segment, index) => ({
+        index,
+        text: cleanGGText(segment.text),
+        box: segment.boundingBox.pixelCoords,
+      })).sort((a, b) => {
+        const yDiff = a.box.y - b.box.y;
+        return Math.abs(yDiff) > 12 ? yDiff : b.box.x - a.box.x;
+      });
+      const groupedSegments: Array<{ text: string; box: typeof cleanedSegments[number]['box']; source_indices: number[] }> = [];
+      for (const segment of cleanedSegments) {
+        const segmentRight = segment.box.x + segment.box.width;
+        const segmentBottom = segment.box.y + segment.box.height;
+        const candidate = groupedSegments
+          .map((group, index) => ({ group, index }))
+          .filter(({ group }) => {
+            const groupRight = group.box.x + group.box.width;
+            const groupBottom = group.box.y + group.box.height;
+            const overlapWidth = Math.max(0, Math.min(groupRight, segmentRight) - Math.max(group.box.x, segment.box.x));
+            const overlapRatio = overlapWidth / Math.max(1, Math.min(group.box.width, segment.box.width));
+            const centerDistance = Math.abs((group.box.x + group.box.width / 2) - (segment.box.x + segment.box.width / 2));
+            const verticalGap = Math.max(group.box.y - segmentBottom, segment.box.y - groupBottom, 0);
+            return verticalGap <= Math.max(70, segment.box.height * 4) && (overlapRatio >= 0.15 || centerDistance <= Math.max(80, group.box.width * 0.35));
+          })
+          .sort((a, b) => Math.abs(a.group.box.x - segment.box.x) - Math.abs(b.group.box.x - segment.box.x))[0];
+        if (candidate) {
+          const group = candidate.group;
+          const groupRight = group.box.x + group.box.width;
+          const groupBottom = group.box.y + group.box.height;
+          const left = Math.min(group.box.x, segment.box.x);
+          const top = Math.min(group.box.y, segment.box.y);
+          const right = Math.max(groupRight, segmentRight);
+          const bottom = Math.max(groupBottom, segmentBottom);
+          group.text = /-$/.test(group.text) ? `${group.text.slice(0, -1)}${segment.text}` : `${group.text} ${segment.text}`;
+          group.text = group.text.replace(/\s+/g, ' ').trim();
+          group.box = { x: left, y: top, width: right - left, height: bottom - top };
+          group.source_indices.push(segment.index);
+        } else {
+          groupedSegments.push({ text: segment.text, box: segment.box, source_indices: [segment.index] });
+        }
+      }
+      const translatedSegments = await Promise.all(
+        groupedSegments
+          .filter((segment) => segment.text.trim().length >= 2)
+          .map(async (segment) => ({
+            ...segment,
+            translatedText: await translateText(segment.text, targetLanguage, sourceLanguage),
+          })),
+      );
+      const nextOverlays: TranslationOverlay[] = translatedSegments.map((segment) => ({
+        id: createOverlayId(currentImage.id, {
+          x: segment.box.x,
+          y: segment.box.y,
+          width: segment.box.width,
+          height: segment.box.height,
+        }),
+        x: segment.box.x,
+        y: segment.box.y,
+        width: segment.box.width,
+        height: segment.box.height,
+        ocrText: segment.text,
+        sentenceText: segment.text,
+        translatedText: segment.translatedText,
+      }));
+      setOverlaysByImage((previous) => ({
+        ...previous,
+        [currentImage.id]: [...(previous[currentImage.id] ?? []), ...nextOverlays],
+      }));
+      setActiveOverlayId(null);
+      setEditorSentence('');
+      setEditorTranslation('');
+      console.group(`[GG Lens OCR] ${currentImage.id}`);
+      console.info('language:', result.language, 'elapsed_ms:', Math.round(performance.now() - started), 'segments:', groupedSegments.length);
+      console.table(groupedSegments.map((segment) => ({
+        text: segment.text,
+        source_indices: segment.source_indices.join(','),
+        bbox: JSON.stringify(segment.box),
+      })));
+      console.groupEnd();
+      setOcrText(`GG Lens xong: đã dịch và ghi đè ${nextOverlays.length} vùng trong ${Math.round(performance.now() - started)}ms.`);
+    } catch (error) {
+      console.error('[GG Lens OCR] failed:', error);
+      setOcrText(`GG Lens thất bại: ${error instanceof Error ? error.message : 'lỗi không xác định'}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const capturePointer = (e: React.PointerEvent<HTMLDivElement>) => {
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -2026,22 +2554,25 @@ export default function useMangaTranslator() {
     const scaledWidth = overlay.width * scaleX;
     const scaledHeight = overlay.height * scaleY;
     const translatedLength = overlay.translatedText.trim().length || 1;
+    const horizontalPadding = Math.min(34, Math.max(15, scaledWidth * 0.2));
+    const verticalPadding = Math.min(26, Math.max(12, scaledHeight * 0.44));
 
     const widthBasedFontSize =
-      scaledWidth / Math.max(6, translatedLength * 0.48);
+      (scaledWidth + horizontalPadding * 2) /
+      Math.max(5, translatedLength * 0.32);
 
-    const heightBasedFontSize = scaledHeight * 0.24;
+    const heightBasedFontSize = (scaledHeight + verticalPadding * 2) * 0.42;
 
     const fontSize = Math.max(
-      8,
-      Math.min(28, widthBasedFontSize, heightBasedFontSize),
+      12,
+      Math.min(46, widthBasedFontSize, heightBasedFontSize),
     );
 
     return {
-      left: overlay.x * scaleX,
-      top: overlay.y * scaleY,
-      width: scaledWidth,
-      height: scaledHeight,
+      left: Math.max(0, overlay.x * scaleX - horizontalPadding),
+      top: Math.max(0, overlay.y * scaleY - verticalPadding),
+      width: scaledWidth + horizontalPadding * 2,
+      height: scaledHeight + verticalPadding * 2,
       fontSize: `${fontSize}px`,
       fontFamily:
         '"Comic Sans MS", "Comic Neue", "Arial Rounded MT Bold", "Trebuchet MS", Arial, sans-serif',
@@ -2149,6 +2680,8 @@ export default function useMangaTranslator() {
     imageToolStatus,
     isDragging,
     isProcessing,
+    ocrChunkHeight,
+    setOcrChunkHeight,
     isSelecting,
     isUpdatingOverlay,
     mergeImages,
@@ -2156,6 +2689,9 @@ export default function useMangaTranslator() {
     ocrText,
     clearSelection,
     scanEntireImage,
+    testRapidOCR,
+    testRapidOCRWithComicDetector,
+    testRapidOCRWithOllama,
     scanSelection,
     saveEditedTranslation,
     startMoveSelection,

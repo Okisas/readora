@@ -19,6 +19,60 @@ import TranslationGlossaryManager, { type TranslationGlossary } from '@/componen
 import UploadPanel from '@/components/UploadPanel'
 import useMangaTranslator from '@/components/useMangaTranslator'
 
+const isMangaDexChapterUrl = (value: string) => {
+  try {
+    const url = new URL(value)
+    return (
+      url.protocol === 'https:' &&
+      (url.hostname === 'mangadex.org' || url.hostname.endsWith('.mangadex.org')) &&
+      /\/chapter\/[0-9a-f-]{36}/i.test(url.pathname)
+    )
+  } catch {
+    return false
+  }
+}
+
+const blobToDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(reader.result as string)
+  reader.onerror = () => reject(reader.error ?? new Error('Không đọc được ảnh'))
+  reader.readAsDataURL(blob)
+})
+
+const fetchMangaDexInBrowser = async (chapterUrl: string) => {
+  const chapterId = new URL(chapterUrl).pathname.match(
+    /\/chapter\/([0-9a-f-]{36})/i,
+  )?.[1]
+  if (!chapterId) throw new Error('URL MangaDex không có mã chapter hợp lệ')
+
+  const apiResponse = await fetch(`https://api.mangadex.org/at-home/server/${chapterId}`, {
+    headers: { Accept: 'application/json' },
+  })
+  if (!apiResponse.ok) throw new Error(`MangaDex API lỗi (${apiResponse.status})`)
+
+  const data = await apiResponse.json() as {
+    baseUrl?: string
+    chapter?: { hash?: string; data?: string[] }
+  }
+  const baseUrl = data.baseUrl
+  const hash = data.chapter?.hash
+  const pages = data.chapter?.data
+  if (!baseUrl || !hash || !Array.isArray(pages) || pages.length === 0) {
+    throw new Error('MangaDex không trả về danh sách trang')
+  }
+
+  const images = []
+  for (const pageName of pages) {
+    const imageResponse = await fetch(
+      `${baseUrl}/data/${hash}/${encodeURIComponent(pageName)}`,
+      { headers: { Accept: 'image/avif,image/webp,image/*' } },
+    )
+    if (!imageResponse.ok) continue
+    images.push(await blobToDataUrl(await imageResponse.blob()))
+  }
+  return images
+}
+
 export default function HomePage() {
   const {
     activeEditorRegion,
@@ -44,6 +98,8 @@ export default function HomePage() {
     images,
     isDragging,
     isProcessing,
+    ocrChunkHeight,
+    setOcrChunkHeight,
     isSelecting,
     isUpdatingOverlay,
     mergeImages,
@@ -51,6 +107,9 @@ export default function HomePage() {
     ocrText,
     clearSelection,
     scanSelection,
+    scanEntireImage,
+    testRapidOCRWithComicDetector,
+    testRapidOCRWithOllama,
     saveEditedTranslation,
     selectOverlay,
     startMoveSelection,
@@ -297,14 +356,20 @@ export default function HomePage() {
 
     try {
       setIsFetchingUrl(true)
-      const response = await fetch('/api/fetch-manga', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: requestedUrl })
-      })
-
-      const data = await response.json()
-      console.log('Phản hồi API:', data)
+      const browserMangaDexImages = isMangaDexChapterUrl(requestedUrl)
+        ? await fetchMangaDexInBrowser(requestedUrl)
+        : null
+      const data = browserMangaDexImages
+        ? { success: true, images: browserMangaDexImages }
+        : await (async () => {
+            const response = await fetch('/api/fetch-manga', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ url: requestedUrl })
+            })
+            return await response.json()
+          })()
+      console.log('Phản hồi lấy ảnh:', data)
 
       if (data.success && data.images && data.images.length > 0) {
         const newImages = data.images.map((imgData: string, index: number) => ({
@@ -732,6 +797,8 @@ export default function HomePage() {
                   currentIndex={currentIndex}
                   sourceLanguage={sourceLanguage}
                   targetLanguage={targetLanguage}
+                  ocrChunkHeight={ocrChunkHeight}
+                  isProcessing={isProcessing}
                   theme={theme}
                   onDeletePage={deletePage}
                   onDragStateChange={setIsDragging}
@@ -742,6 +809,10 @@ export default function HomePage() {
                   onSourceLanguageChange={setSourceLanguage}
                   onTargetLanguageChange={setTargetLanguage}
                   onSelectPage={selectPage}
+                  onOcrChunkHeightChange={setOcrChunkHeight}
+                  onScanEntireImage={scanEntireImage}
+                  onTestRapidOCRWithComicDetector={testRapidOCRWithComicDetector}
+                  onTestRapidOCRWithOllama={testRapidOCRWithOllama}
                 />
               </div>
 

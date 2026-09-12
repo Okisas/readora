@@ -4,6 +4,73 @@ import { launchBrowser } from "@/lib/launchBrowser";
 
 export const maxDuration = 300;
 
+const fetchMangaDexChapterImages = async (chapterUrl: string) => {
+  const browser = await launchBrowser();
+
+  try {
+    const page = await browser.newPage();
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+    );
+    await page.goto(chapterUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 45_000,
+    });
+
+    await page.evaluate(async () => {
+      for (let index = 0; index < 30; index += 1) {
+        window.scrollTo(0, document.body.scrollHeight);
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
+      window.scrollTo(0, 0);
+    });
+
+    const imageUrls = await page.evaluate(() => {
+      const urls = new Set<string>();
+      document.querySelectorAll("img").forEach((image) => {
+        const candidates = [
+          image.currentSrc,
+          image.getAttribute("src"),
+          image.getAttribute("data-src"),
+          image.getAttribute("data-original"),
+        ];
+        candidates.forEach((candidate) => {
+          if (
+            candidate &&
+            candidate.startsWith("http") &&
+            /(?:uploads\.mangadex\.org|mangadex\.org)/i.test(candidate) &&
+            /\.(?:jpg|jpeg|png|webp)(?:[?#].*)?$/i.test(candidate)
+          ) {
+            urls.add(candidate);
+          }
+        });
+      });
+      return [...urls];
+    });
+
+    const images = [];
+    for (const imageUrl of imageUrls) {
+      try {
+        const response = await page.goto(imageUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: 30_000,
+        });
+        if (!response || !response.ok()) continue;
+        const contentType = response.headers()["content-type"] || "image/jpeg";
+        if (!contentType.startsWith("image/")) continue;
+        const buffer = await response.buffer();
+        images.push(`data:${contentType};base64,${buffer.toString("base64")}`);
+      } catch (error) {
+        console.error("Failed to fetch MangaDex page image:", imageUrl, error);
+      }
+    }
+
+    return images;
+  } finally {
+    await browser.close();
+  }
+};
+
 export async function POST(request: NextRequest) {
   try {
     const { url } = await request.json();
@@ -57,54 +124,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const atHomeResponse = await fetch(
-        `https://api.mangadex.org/at-home/server/${chapterId}`,
-        { headers: { Accept: "application/json" } },
-      );
-
-      if (!atHomeResponse.ok) {
-        return NextResponse.json(
-          {
-            error:
-              "Không thể lấy danh sách ảnh MangaDex. Hãy kiểm tra Cloudflare WARP hoặc quyền truy cập chapter.",
-          },
-          { status: 502 },
-        );
-      }
-
-      const atHomeData = await atHomeResponse.json();
-      const baseUrl = atHomeData.baseUrl;
-      const chapterHash = atHomeData.chapter?.hash;
-      const pageNames = atHomeData.chapter?.data;
-
-      if (!baseUrl || !chapterHash || !Array.isArray(pageNames)) {
-        return NextResponse.json(
-          { error: "Phản hồi MangaDex không có danh sách ảnh hợp lệ" },
-          { status: 502 },
-        );
-      }
-
-      const images = await Promise.all(
-        pageNames.map(async (pageName: string) => {
-          const imageUrl = `${baseUrl}/data/${chapterHash}/${encodeURIComponent(pageName)}`;
-          const imageResponse = await fetch(imageUrl, {
-            headers: { Referer: "https://mangadex.org/" },
-          });
-
-          if (!imageResponse.ok) return null;
-
-          const contentType =
-            imageResponse.headers.get("content-type") || "image/jpeg";
-          if (!contentType.startsWith("image/")) return null;
-
-          const buffer = Buffer.from(await imageResponse.arrayBuffer());
-          return `data:${contentType};base64,${buffer.toString("base64")}`;
-        }),
-      );
-
-      const validImages = images.filter(
-        (image): image is string => image !== null,
-      );
+      const validImages = await fetchMangaDexChapterImages(parsedUrl.toString());
 
       if (validImages.length === 0) {
         return NextResponse.json(

@@ -1,4 +1,4 @@
-import { Upload } from 'lucide-react'
+import { LoaderCircle, Upload } from 'lucide-react'
 import LanguageSelector from '@/components/LanguageSelector'
 import PageThumbnails from '@/components/PageThumbnails'
 import type { UploadedImage } from '@/components/types'
@@ -10,6 +10,8 @@ type UploadPanelProps = {
   currentIndex: number
   sourceLanguage: string
   targetLanguage: string
+  ocrChunkHeight: number
+  isProcessing: boolean
   theme: 'dark' | 'light'
   onDeletePage: (index: number) => void
   onDragStateChange: (value: boolean) => void
@@ -27,9 +29,14 @@ type UploadPanelProps = {
   onSourceLanguageChange: (value: string) => void
   onTargetLanguageChange: (value: string) => void
   onSelectPage: (index: number) => void
+  onOcrChunkHeightChange: (value: number) => void
+  onScanEntireImage: () => void
+  onTestRapidOCRWithComicDetector: () => void
+  onTestRapidOCRWithOllama: () => void
 }
 
 const sourceLanguageOptions = [
+  { value: 'auto', label: 'Tự động nhận diện' },
   { value: 'eng', label: 'Tiếng Anh' },
   {
     value: 'jpn',
@@ -72,6 +79,8 @@ export default function UploadPanel({
   currentIndex,
   sourceLanguage,
   targetLanguage,
+  ocrChunkHeight,
+  isProcessing,
   theme,
   onDeletePage,
   onDragStateChange,
@@ -82,6 +91,10 @@ export default function UploadPanel({
   onSourceLanguageChange,
   onTargetLanguageChange,
   onSelectPage,
+  onOcrChunkHeightChange,
+  onScanEntireImage,
+  onTestRapidOCRWithComicDetector,
+  onTestRapidOCRWithOllama,
 }: UploadPanelProps) {
   return (
     <div
@@ -153,6 +166,43 @@ export default function UploadPanel({
             theme={theme}
             onChange={onTargetLanguageChange}
           />
+        </div>
+
+        <div className={`rounded-2xl border p-3 ${theme === 'dark' ? 'border-zinc-800 bg-black/20' : 'border-zinc-200 bg-zinc-50'}`}>
+          <div className="mb-2 text-sm font-semibold">Quét OCR thử nghiệm</div>
+          <p className={`mb-3 text-xs leading-relaxed ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}`}>
+            Quét từng đoạn theo chiều cao đã chọn và ghi text/bounding box vào Console (F12). Bước này chưa dịch.
+          </p>
+          <div className="flex items-center gap-2">
+            <label className="flex-1 text-xs">
+              Cao mỗi vùng (px)
+              <input
+                type="number"
+                min={400}
+                max={6000}
+                step={100}
+                value={ocrChunkHeight}
+                onChange={(event) => onOcrChunkHeightChange(Number(event.target.value) || 1600)}
+                className={`mt-1 w-full rounded-xl border px-3 py-2 text-sm outline-none ${theme === 'dark' ? 'border-zinc-700 bg-zinc-800 text-white' : 'border-zinc-300 bg-white text-zinc-900'}`}
+              />
+            </label>
+            <button
+              type="button"
+              disabled={!images.length || isProcessing}
+              onClick={onTestRapidOCRWithComicDetector}
+              className={`mt-5 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${theme === 'dark' ? 'bg-white text-black hover:bg-zinc-200' : 'bg-zinc-900 text-white hover:bg-zinc-800'}`}
+            >
+              {isProcessing ? <span className="inline-flex items-center gap-2"><LoaderCircle className="h-4 w-4 animate-spin" />Đang quét...</span> : 'Quét OCR'}
+            </button>
+          </div>
+          <button
+            type="button"
+            disabled={!images.length || isProcessing}
+            onClick={onTestRapidOCRWithOllama}
+            className={`mt-2 w-full rounded-xl border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${theme === 'dark' ? 'border-zinc-700 text-zinc-200 hover:bg-zinc-800' : 'border-zinc-300 text-zinc-800 hover:bg-zinc-100'}`}
+          >
+            {isProcessing ? <span className="inline-flex items-center gap-2"><LoaderCircle className="h-4 w-4 animate-spin" />Đang dịch...</span> : 'GG Lens'}
+          </button>
         </div>
 
         {statusMessage && (

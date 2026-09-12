@@ -32,6 +32,25 @@ const getOCRWorker = (language: string) => {
   return workerPromise;
 };
 
+// Tesseract.js only returns plain text through Tesseract.recognize(). Use the
+// cached worker directly when layout data is needed for OCR preview/debugging.
+export const recognizeWithLayout = async (
+  image: HTMLCanvasElement,
+  language: string,
+  pageSegMode: Tesseract.PSM,
+) => {
+  const worker = await getOCRWorker(language);
+  await worker.setParameters({
+    tessedit_pageseg_mode: pageSegMode,
+    preserve_interword_spaces: '1',
+  });
+  return worker.recognize(
+    image,
+    {},
+    { text: true, blocks: true },
+  );
+};
+
 export const preprocessCanvas = (sourceCanvas: HTMLCanvasElement) => {
   const processedCanvas = document.createElement("canvas");
 
@@ -301,6 +320,117 @@ export const reorderVerticalLines = (lines: OCRLine[], language: string) => {
     })
     .map((line) => line.text)
     .join("\n");
+};
+
+export const mergeOCRLines = (lines: OCRLine[]) => {
+  const source = lines
+    .map((line) => ({
+      text: cleanOCRText(line.text ?? ''),
+      bbox: line.bbox,
+    }))
+    .filter((line) => line.text && line.bbox);
+
+  const ordered = [...source].sort((a, b) => {
+    const ay = a.bbox!.y0;
+    const by = b.bbox!.y0;
+    const rowTolerance = Math.max(
+      12,
+      Math.min(a.bbox!.y1 - a.bbox!.y0, b.bbox!.y1 - b.bbox!.y0) * 0.65,
+    );
+    return Math.abs(ay - by) <= rowTolerance ? a.bbox!.x0 - b.bbox!.x0 : ay - by;
+  });
+
+  const merged: OCRLine[] = [];
+  for (const line of ordered) {
+    const bbox = line.bbox!;
+    const previous = merged[merged.length - 1];
+    if (!previous?.bbox) {
+      merged.push({ text: line.text, bbox: { ...bbox } });
+      continue;
+    }
+
+    const previousBox = previous.bbox;
+    const previousHeight = previousBox.y1 - previousBox.y0;
+    const verticalGap = bbox.y0 - previousBox.y1;
+    const horizontalOverlap = Math.max(
+      0,
+      Math.min(previousBox.x1, bbox.x1) - Math.max(previousBox.x0, bbox.x0),
+    );
+    const smallerWidth = Math.max(
+      1,
+      Math.min(previousBox.x1 - previousBox.x0, bbox.x1 - bbox.x0),
+    );
+    const sameTextRegion =
+      verticalGap <= Math.max(28, previousHeight * 1.45) &&
+      horizontalOverlap / smallerWidth >= 0.12;
+
+    if (sameTextRegion) {
+      previous.text = `${previous.text} ${line.text}`.replace(/\s+/g, ' ').trim();
+      previousBox.x0 = Math.min(previousBox.x0, bbox.x0);
+      previousBox.y0 = Math.min(previousBox.y0, bbox.y0);
+      previousBox.x1 = Math.max(previousBox.x1, bbox.x1);
+      previousBox.y1 = Math.max(previousBox.y1, bbox.y1);
+    } else {
+      const duplicate = merged.some((item) => {
+        if (!item.bbox) return false;
+        const same = item.text.toLowerCase() === line.text.toLowerCase();
+        const overlap = Math.max(
+          0,
+          Math.min(item.bbox.x1, bbox.x1) - Math.max(item.bbox.x0, bbox.x0),
+        );
+        return same && overlap > 0;
+      });
+      if (!duplicate) merged.push({ text: line.text, bbox: { ...bbox } });
+    }
+  }
+
+  return merged;
+};
+
+export const cleanGroupedOCRText = (text: string) =>
+  text
+    .replace(/\bI'E\b/gi, "I'VE")
+    .replace(/^I\s+(?=(?:LORD|WHAT|THANK|YOU'VE|THOSE)\b)/gim, '')
+    .replace(/(\b(?:OF|GOT|OVERLOOK)\s+)I(?=\s+[A-Z0-9])/gi, '$1')
+    .replace(/\bI\s+(?=WHAT\b)/gi, '')
+    .replace(/([A-Za-z])-\s+([A-Za-z])/g, '$1$2')
+    .replace(/[|¦]/g, 'I')
+    .replace(/[“”„]/g, '"')
+    .replace(/[‘’]/g, "'")
+    .replace(/\s+/g, ' ')
+    .replace(/\b([A-Za-z]{1,3})\s+\1\b/gi, '$1')
+    .replace(/\s+[\\/|]+\s*$/gm, '')
+    .replace(/\s+[a-z]\s*$/gm, '')
+    .trim();
+
+export const sortOCRLinesMangaOrder = (lines: OCRLine[]) => {
+  const sorted: OCRLine[] = [];
+  const rowTolerance = (line: OCRLine) =>
+    Math.max(24, ((line.bbox?.y1 ?? 0) - (line.bbox?.y0 ?? 0)) * 0.8);
+
+  for (const line of lines.filter((item) => item.bbox && item.text.trim())) {
+    const centerY = (line.bbox!.y0 + line.bbox!.y1) / 2;
+    const existingRow = sorted.filter((item) => {
+      const itemCenterY = (item.bbox!.y0 + item.bbox!.y1) / 2;
+      return Math.abs(itemCenterY - centerY) <= Math.max(rowTolerance(line), rowTolerance(item));
+    });
+
+    if (existingRow.length === 0) {
+      sorted.push(line);
+      continue;
+    }
+
+    const insertBefore = sorted.findIndex((item) => {
+      const itemCenterY = (item.bbox!.y0 + item.bbox!.y1) / 2;
+      if (Math.abs(itemCenterY - centerY) > Math.max(rowTolerance(line), rowTolerance(item))) {
+        return itemCenterY > centerY;
+      }
+      return item.bbox!.x1 < line.bbox!.x1;
+    });
+    sorted.splice(insertBefore < 0 ? sorted.length : insertBefore, 0, line);
+  }
+
+  return sorted;
 };
 
 export const getOCRAttempts = (language: string): OCRAttempt[] => {

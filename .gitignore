@@ -47,3 +47,4 @@ next-env.d.ts
 /.libretranslate-data/
 /.libretranslate-config/
 /.libretranslate-cache/
+.venv-rapidocr/

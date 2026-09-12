@@ -270,28 +270,6 @@ export default function PreviewCanvas({
                 onPointerDown={stopPointerEvent}
                 title={overlay.sentenceText}
               >
-                <button
-                  type="button"
-                  onMouseDown={stopPointerEvent}
-                  onPointerDown={stopPointerEvent}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onDeleteOverlay(overlay.id)
-                  }}
-                  className={`overlay-delete-button pointer-events-auto absolute right-[15%] top-[20%] z-10 rounded-full px-2 py-1 text-[10px] font-semibold transition ${
-                    theme === 'dark'
-                      ? 'bg-black/70 text-white'
-                      : 'bg-zinc-900/75 text-white'
-                  } ${
-                    hoveredOverlayId === overlay.id ||
-                    activeOverlayId === overlay.id
-                      ? 'opacity-100'
-                      : 'opacity-0'
-                  }`}
-                >
-                  Xóa
-                </button>
-
                 <div
                   className="flex h-full w-full items-center justify-center break-words px-5 py-4 text-center font-semibold leading-[1.12]"
                   style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
@@ -387,7 +365,7 @@ export default function PreviewCanvas({
                   {isUpdatingOverlay
                     ? 'Đang dịch...'
                     : activeOverlayId
-                    ? 'Dịch lại'
+                    ? 'Dịch'
                     : 'Dịch'}
                 </button>
 
@@ -404,6 +382,17 @@ export default function PreviewCanvas({
                     }`}
                   >
                     Save
+                  </button>
+                )}
+                {activeOverlayId && (
+                  <button
+                    type="button"
+                    onMouseDown={stopPointerEvent}
+                    onPointerDown={stopPointerEvent}
+                    onClick={() => onDeleteOverlay(activeOverlayId)}
+                    className="flex-1 rounded-xl border border-red-300 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700"
+                  >
+                    Xóa
                   </button>
                 )}
               </div>
