@@ -18,7 +18,7 @@
     "@xenova/transformers": "^2.17.2",
     "canvas": "^3.2.3",
     "lucide-react": "^1.16.0",
-    "next": "16.2.6",
+    "next": "^16.3.3",
     "onnxruntime-web": "^1.29.0",
     "puppeteer": "^25.4.0",
     "puppeteer-core": "^25.4.0",
@@ -28,6 +28,7 @@
     "translate": "^3.0.1"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.20.6",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -35,6 +36,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.131.1"
   }
 }

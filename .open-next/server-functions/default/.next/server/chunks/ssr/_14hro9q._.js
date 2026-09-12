@@ -1,0 +1,9 @@
+module.exports=[33290,a=>{"use strict";var b=a.i(7997),c=a.i(71618);a.s(["default",0,function({children:a}){return(0,b.jsxs)("html",{lang:"en",children:[(0,b.jsx)("meta",{name:"google-adsense-account",content:"ca-pub-3558900564632115"}),(0,b.jsx)("meta",{name:"google-site-verification",content:"3Rki2vSPK39LR6h_QEZh9t96z4Z4ZVV06PZiYW_6kiY"}),(0,b.jsxs)("body",{children:[(0,b.jsx)(c.default,{src:"https://www.googletagmanager.com/gtag/js?id=G-YYVPXWZLF8",strategy:"afterInteractive"}),(0,b.jsx)(c.default,{id:"google-analytics",strategy:"afterInteractive",children:`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+
+            gtag('config', 'G-YYVPXWZLF8');
+          `}),(0,b.jsx)("div",{className:"hidden",children:"Readora được duy trì bằng quảng cáo để giữ web hoạt động miễn phí. Nếu quảng cáo hữu ích với bạn, hãy cân nhắc ủng hộ bằng cách tương tác với chúng. Cảm ơn bạn ❤️ Ads help keep Readora free and running for everyone ❤️"}),a,(0,b.jsxs)("div",{className:"mt-6 text-center text-sm text-zinc-500",children:[(0,b.jsx)("span",{children:"Support • Contact • Feedback:"})," ",(0,b.jsx)("a",{href:"mailto:tranthanhnguyenviet@gmail.com",className:"underline underline-offset-4 hover:text-white",children:"tranthanhnguyenviet@gmail.com"}),(0,b.jsx)("span",{className:"mx-2",children:"•"}),(0,b.jsx)("a",{href:"/privacy",className:"hover:text-white",children:"Privacy"})]})]})]})},"metadata",0,{title:"Readora | Translate Manga, Manhwa, and Manhua Images",description:"Readora helps you translate manga, manhwa, and manhua from images with a simple online reader and editor."}])},70864,function(a){a.n(a.i(33290))},44536,(a,b,c)=>{let{createClientModuleProxy:d}=a.r(11857);a.n(d("[project]/node_modules/next/dist/client/script.js"))},11153,a=>{"use strict";var b=a.i(44536);a.n(b)},71618,(a,b,c)=>{b.exports=a.r(11153)}];
+
+//# sourceMappingURL=_14hro9q._.js.map

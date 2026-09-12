@@ -1,0 +1,15 @@
+# Local LibreTranslate runtime and Argos model files are not needed on Vercel.
+.libretranslate-data/
+.libretranslate-cache/
+.libretranslate-config/
+.venv-libretranslate/
+.venv-rapidocr/
+
+# Local detector experiments; GG Lens runs in the browser.
+public/models/
+
+# Local development/build output.
+.next/
+node_modules/
+coverage/
+*.log
