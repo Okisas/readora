@@ -109,7 +109,8 @@ export default function HomePage() {
     scanSelection,
     scanEntireImage,
     testRapidOCRWithComicDetector,
-    testRapidOCRWithOllama,
+    scanWithGGLens,
+    translateGGResults,
     saveEditedTranslation,
     selectOverlay,
     startMoveSelection,
@@ -356,10 +357,15 @@ export default function HomePage() {
 
     try {
       setIsFetchingUrl(true)
-      const browserMangaDexImages = isMangaDexChapterUrl(requestedUrl)
-        ? await fetchMangaDexInBrowser(requestedUrl)
-        : null
-      const data = browserMangaDexImages
+      let browserMangaDexImages: string[] | null = null
+      if (isMangaDexChapterUrl(requestedUrl)) {
+        try {
+          browserMangaDexImages = await fetchMangaDexInBrowser(requestedUrl)
+        } catch (browserError) {
+          console.warn('MangaDex browser fetch failed; trying server fallback:', browserError)
+        }
+      }
+      const data = browserMangaDexImages && browserMangaDexImages.length > 0
         ? { success: true, images: browserMangaDexImages }
         : await (async () => {
             const response = await fetch('/api/fetch-manga', {
@@ -810,9 +816,8 @@ export default function HomePage() {
                   onTargetLanguageChange={setTargetLanguage}
                   onSelectPage={selectPage}
                   onOcrChunkHeightChange={setOcrChunkHeight}
-                  onScanEntireImage={scanEntireImage}
-                  onTestRapidOCRWithComicDetector={testRapidOCRWithComicDetector}
-                  onTestRapidOCRWithOllama={testRapidOCRWithOllama}
+                  onScanWithGGLens={scanWithGGLens}
+                  onTranslateGGResults={translateGGResults}
                 />
               </div>
 

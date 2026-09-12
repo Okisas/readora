@@ -62,6 +62,12 @@ type PointerInteraction =
       initialSelection: SelectionRect;
     };
 
+type GGScanSegment = {
+  text: string;
+  box: { x: number; y: number; width: number; height: number };
+  source_indices: number[];
+};
+
 export default function useMangaTranslator() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -76,6 +82,8 @@ export default function useMangaTranslator() {
   const [ocrText, setOcrText] = useState("");
 
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const [pendingGGSegments, setPendingGGSegments] = useState<Record<string, GGScanSegment[]>>({});
 
   // OCR preview settings. The scan is intentionally separate from translation
   // so the raw recognition can be checked in the browser console first.
@@ -100,7 +108,7 @@ export default function useMangaTranslator() {
 
   const [isSelecting, setIsSelecting] = useState(false);
 
-  const [sourceLanguage, setSourceLanguage] = useState("eng");
+  const [sourceLanguage, setSourceLanguage] = useState("auto");
 
   const [targetLanguage, setTargetLanguage] = useState("vi");
 
@@ -1925,7 +1933,7 @@ export default function useMangaTranslator() {
     }
   };
 
-  const testRapidOCR = async (useComicDetector = false, useOllama = false) => {
+  const testRapidOCR = async (useComicDetector = false) => {
     if (!currentImage) return;
     const totalStarted = performance.now();
     try {
@@ -1983,20 +1991,6 @@ export default function useMangaTranslator() {
         const yDiff = a.bbox[0][1] - b.bbox[0][1];
         return Math.abs(yDiff) > 50 ? yDiff : b.bbox[0][0] - a.bbox[0][0];
       });
-      if (useOllama) {
-        const ollamaResponse = await fetch('/api/ollama-ocr', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageBase64, results: mergedRows }),
-        });
-        const ollamaData = await ollamaResponse.json();
-        if (!ollamaResponse.ok) throw new Error(ollamaData.error || `Ollama lỗi (${ollamaResponse.status})`);
-        console.group(`[Ollama OCR] ${currentImage.id}`);
-        console.info('model:', ollamaData.model, 'groups:', ollamaData.groups?.length ?? 0);
-        console.table(ollamaData.groups ?? []);
-        console.groupEnd();
-        setOcrText(`RapidOCR + Ollama xong: ${ollamaData.groups?.length ?? 0} nhóm. Xem Console (F12).`);
-        return;
-      }
       console.group(`[RapidOCR] ${currentImage.id}`);
       console.info('timings:', {
         detector_ms: useComicDetector ? detectorMs : 0,
@@ -2023,7 +2017,7 @@ export default function useMangaTranslator() {
   };
 
   const testRapidOCRWithComicDetector = () => testRapidOCR(true);
-  const testRapidOCRWithOllama = async () => {
+  const scanWithGGLens = async () => {
     if (!currentImage || !imageRef.current) return;
     const started = performance.now();
     try {
@@ -2131,6 +2125,16 @@ export default function useMangaTranslator() {
           groupedSegments.push({ text: segment.text, box: segment.box, source_indices: [segment.index] });
         }
       }
+      const scanSegments = groupedSegments.filter(
+        (segment) =>
+          segment.text.trim().length >= 2 &&
+          /[\p{L}\p{N}]/u.test(segment.text),
+      );
+      setPendingGGSegments((previous) => ({ ...previous, [currentImage.id]: scanSegments }));
+      console.info('[GG Lens OCR] scan-only result saved:', scanSegments.length);
+      setOcrText(`GG Lens xong: đã quét ${scanSegments.length} vùng trong ${Math.round(performance.now() - started)}ms. Bấm Dịch để dịch.`);
+      return;
+
       const translatedSegments = await Promise.all(
         groupedSegments
           .filter((segment) => segment.text.trim().length >= 2)
@@ -2173,6 +2177,105 @@ export default function useMangaTranslator() {
     } catch (error) {
       console.error('[GG Lens OCR] failed:', error);
       setOcrText(`GG Lens thất bại: ${error instanceof Error ? error.message : 'lỗi không xác định'}`);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const translateGGResults = async () => {
+    if (!currentImage) return;
+    const segments = (pendingGGSegments[currentImage.id] ?? []).filter(
+      (segment) => /[\p{L}\p{N}]/u.test(segment.text),
+    );
+    if (segments.length === 0) {
+      setOcrText('Chưa có kết quả GG Lens. Hãy bấm GG Lens trước.');
+      return;
+    }
+
+    const started = performance.now();
+    let translatedCount = 0;
+    let failedCount = 0;
+    try {
+      setIsProcessing(true);
+      for (let index = 0; index < segments.length; index += 1) {
+        const segment = segments[index];
+        setOcrText(
+          `Đang dịch vùng ${index + 1}/${segments.length} — đã ghi đè ${translatedCount} vùng...`,
+        );
+
+        try {
+          const translatedText = await translateText(
+            segment.text,
+            targetLanguage,
+            sourceLanguage,
+          );
+          const sourceWidth = imageRef.current?.naturalWidth || imageSize.width;
+          const sourceHeight = imageRef.current?.naturalHeight || imageSize.height;
+          const paddingX = Math.min(56, Math.max(10, segment.box.width * 0.15));
+          const paddingY = Math.min(22, Math.max(5, segment.box.height * 0.3));
+          const expandedBox = {
+            x: Math.max(0, segment.box.x - paddingX),
+            y: Math.max(0, segment.box.y - paddingY),
+            width: Math.min(
+              sourceWidth || segment.box.width + paddingX * 2,
+              segment.box.width + paddingX * 2,
+            ),
+            height: Math.min(
+              sourceHeight || segment.box.height + paddingY * 2,
+              segment.box.height + paddingY * 2,
+            ),
+          };
+          expandedBox.width = Math.min(
+            expandedBox.width,
+            (sourceWidth || expandedBox.x + expandedBox.width) - expandedBox.x,
+          );
+          expandedBox.height = Math.min(
+            expandedBox.height,
+            (sourceHeight || expandedBox.y + expandedBox.height) - expandedBox.y,
+          );
+          const nextOverlay: TranslationOverlay = {
+            id: createOverlayId(currentImage.id, expandedBox),
+            x: expandedBox.x,
+            y: expandedBox.y,
+            width: expandedBox.width,
+            height: expandedBox.height,
+            ocrText: segment.text,
+            sentenceText: segment.text,
+            translatedText,
+          };
+
+          // Ghi đè ngay sau khi từng vùng dịch xong, không chờ cả ảnh hoàn tất.
+          setOverlaysByImage((previous) => ({
+            ...previous,
+            [currentImage.id]: [
+              ...(previous[currentImage.id] ?? []).filter(
+                (overlay) => overlay.id !== nextOverlay.id,
+              ),
+              nextOverlay,
+            ],
+          }));
+          translatedCount += 1;
+          setActiveOverlayId(null);
+          setEditorSentence('');
+          setEditorTranslation('');
+        } catch (error) {
+          failedCount += 1;
+          console.error('[GG Lens translation] region failed:', {
+            index,
+            text: segment.text,
+            error,
+          });
+        }
+      }
+
+      setOcrText(
+        `Đã dịch và ghi đè ${translatedCount}/${segments.length} vùng trong ${Math.round(
+          performance.now() - started,
+        )}ms${failedCount > 0 ? `; bỏ qua ${failedCount} vùng lỗi.` : '.'}`,
+      );
+    } catch (error) {
+      console.error('[GG Lens translation] failed:', error);
+      setOcrText(`Dịch thất bại: ${error instanceof Error ? error.message : 'lỗi không xác định'}`);
     } finally {
       setIsProcessing(false);
     }
@@ -2691,7 +2794,8 @@ export default function useMangaTranslator() {
     scanEntireImage,
     testRapidOCR,
     testRapidOCRWithComicDetector,
-    testRapidOCRWithOllama,
+    scanWithGGLens,
+    translateGGResults,
     scanSelection,
     saveEditedTranslation,
     startMoveSelection,

@@ -30,9 +30,8 @@ type UploadPanelProps = {
   onTargetLanguageChange: (value: string) => void
   onSelectPage: (index: number) => void
   onOcrChunkHeightChange: (value: number) => void
-  onScanEntireImage: () => void
-  onTestRapidOCRWithComicDetector: () => void
-  onTestRapidOCRWithOllama: () => void
+  onScanWithGGLens: () => void
+  onTranslateGGResults: () => void
 }
 
 const sourceLanguageOptions = [
@@ -92,9 +91,8 @@ export default function UploadPanel({
   onTargetLanguageChange,
   onSelectPage,
   onOcrChunkHeightChange,
-  onScanEntireImage,
-  onTestRapidOCRWithComicDetector,
-  onTestRapidOCRWithOllama,
+  onScanWithGGLens,
+  onTranslateGGResults,
 }: UploadPanelProps) {
   return (
     <div
@@ -169,9 +167,9 @@ export default function UploadPanel({
         </div>
 
         <div className={`rounded-2xl border p-3 ${theme === 'dark' ? 'border-zinc-800 bg-black/20' : 'border-zinc-200 bg-zinc-50'}`}>
-          <div className="mb-2 text-sm font-semibold">Quét OCR thử nghiệm</div>
+          <div className="mb-2 text-sm font-semibold">Quét</div>
           <p className={`mb-3 text-xs leading-relaxed ${theme === 'dark' ? 'text-zinc-400' : 'text-zinc-500'}`}>
-            Quét từng đoạn theo chiều cao đã chọn và ghi text/bounding box vào Console (F12). Bước này chưa dịch.
+            Quét từng đoạn theo chiều cao đã chọn và lưu các vùng chữ. Sau đó bấm Dịch để ghi đè bản dịch.
           </p>
           <div className="flex items-center gap-2">
             <label className="flex-1 text-xs">
@@ -189,19 +187,19 @@ export default function UploadPanel({
             <button
               type="button"
               disabled={!images.length || isProcessing}
-              onClick={onTestRapidOCRWithComicDetector}
+              onClick={onScanWithGGLens}
               className={`mt-5 rounded-xl px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${theme === 'dark' ? 'bg-white text-black hover:bg-zinc-200' : 'bg-zinc-900 text-white hover:bg-zinc-800'}`}
             >
-              {isProcessing ? <span className="inline-flex items-center gap-2"><LoaderCircle className="h-4 w-4 animate-spin" />Đang quét...</span> : 'Quét OCR'}
+              {isProcessing ? <span className="inline-flex items-center gap-2"><LoaderCircle className="h-4 w-4 animate-spin" />Đang quét...</span> : 'Quét'}
             </button>
           </div>
           <button
             type="button"
             disabled={!images.length || isProcessing}
-            onClick={onTestRapidOCRWithOllama}
+            onClick={onTranslateGGResults}
             className={`mt-2 w-full rounded-xl border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${theme === 'dark' ? 'border-zinc-700 text-zinc-200 hover:bg-zinc-800' : 'border-zinc-300 text-zinc-800 hover:bg-zinc-100'}`}
           >
-            {isProcessing ? <span className="inline-flex items-center gap-2"><LoaderCircle className="h-4 w-4 animate-spin" />Đang dịch...</span> : 'GG Lens'}
+            {isProcessing ? <span className="inline-flex items-center gap-2"><LoaderCircle className="h-4 w-4 animate-spin" />Đang dịch...</span> : 'Dịch'}
           </button>
         </div>
 

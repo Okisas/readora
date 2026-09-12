@@ -7,7 +7,7 @@ import path from "node:path";
 export async function launchBrowser(): Promise<Browser> {
   if (process.env.VERCEL) {
     return puppeteerCore.launch({
-      args: chromium.args,
+      args: [...chromium.args, "--disable-http2", "--disable-quic"],
       executablePath: await chromium.executablePath(
         path.join(
           process.cwd(),
@@ -29,6 +29,8 @@ export async function launchBrowser(): Promise<Browser> {
       "--disable-blink-features=AutomationControlled",
       "--disable-dev-shm-usage",
       "--disable-web-security",
+      "--disable-http2",
+      "--disable-quic",
       "--window-size=1920,1080",
     ],
   })) as unknown as Browser;

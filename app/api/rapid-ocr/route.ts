@@ -13,10 +13,9 @@ export const maxDuration = 120
 export async function POST(request: NextRequest) {
   let tempFile = ''
   try {
-    const { imageBase64, boxes, detector } = await request.json() as {
+    const { imageBase64, boxes } = await request.json() as {
       imageBase64?: string
       boxes?: Array<{ x: number; y: number; width: number; height: number }>
-      detector?: 'yolo26'
     }
     if (!imageBase64) return NextResponse.json({ error: 'Thiếu ảnh OCR' }, { status: 400 })
 
@@ -32,7 +31,6 @@ export async function POST(request: NextRequest) {
       : path.join(process.cwd(), '.venv-rapidocr', 'bin', 'python')
     const script = path.join(process.cwd(), 'scripts', 'benchmark-rapidocr.py')
     const args = [script, tempFile]
-    if (detector === 'yolo26') args.push('--detector', path.join(process.cwd(), 'public', 'models', 'manga_panel_detector_fp32_1024.onnx'))
     if (boxes?.length) args.push('--boxes', JSON.stringify(boxes.slice(0, 32)))
     const { stdout, stderr } = await execFileAsync(python, args, {
       timeout: 110_000,

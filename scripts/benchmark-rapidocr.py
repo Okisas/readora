@@ -9,8 +9,6 @@ import time
 from pathlib import Path
 
 import cv2
-import numpy as np
-import onnxruntime as ort
 from rapidocr_onnxruntime import RapidOCR
 
 
@@ -49,7 +47,6 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("image", type=Path)
     parser.add_argument("--boxes", type=str, default="")
-    parser.add_argument("--detector", type=Path, default=None)
     args = parser.parse_args()
 
     started = time.perf_counter()
@@ -65,30 +62,6 @@ def main() -> None:
     recognition_started = time.perf_counter()
     image = cv2.imread(str(args.image))
     requested_boxes = json.loads(args.boxes) if args.boxes else None
-    if args.detector:
-        session = ort.InferenceSession(str(args.detector), providers=["CPUExecutionProvider"])
-        size = 1024
-        scale = min(size / image.shape[1], size / image.shape[0])
-        width, height = max(1, round(image.shape[1] * scale)), max(1, round(image.shape[0] * scale))
-        resized = cv2.resize(image, (width, height))
-        canvas = np.full((size, size, 3), 114, dtype=np.uint8)
-        offset_x, offset_y = (size - width) // 2, (size - height) // 2
-        canvas[offset_y:offset_y + height, offset_x:offset_x + width] = resized
-        # This Ultralytics ONNX export performs its own /255 normalization.
-        # Passing an already normalized tensor makes all confidences nearly 0.
-        tensor = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB).astype(np.float32)
-        tensor = np.transpose(tensor, (2, 0, 1))[None, ...]
-        detections = session.run(None, {"images": tensor})[0][0]
-        requested_boxes = []
-        for x1, y1, x2, y2, confidence, class_id in detections:
-            if confidence >= 0.35 and int(class_id) == 1:
-                requested_boxes.append({
-                    "x": float(max(0, (x1 - offset_x) / scale)),
-                    "y": float(max(0, (y1 - offset_y) / scale)),
-                    "width": float(max(1, (x2 - x1) / scale)),
-                    "height": float(max(1, (y2 - y1) / scale)),
-                })
-        requested_boxes = requested_boxes[:64]
     if requested_boxes:
         image = image if image is not None else cv2.imread(str(args.image))
         crops = []
