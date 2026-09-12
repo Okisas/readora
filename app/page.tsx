@@ -39,13 +39,17 @@ const blobToDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
   reader.readAsDataURL(blob)
 })
 
+const MANGADEX_PROXY_URL =
+  process.env.NEXT_PUBLIC_MANGADEX_PROXY_URL?.trim() ||
+  'https://readora-mangadex-proxy.tranthanhnguyenviet.workers.dev'
+
 const fetchMangaDexInBrowser = async (chapterUrl: string) => {
   const chapterId = new URL(chapterUrl).pathname.match(
     /\/chapter\/([0-9a-f-]{36})/i,
   )?.[1]
   if (!chapterId) throw new Error('URL MangaDex không có mã chapter hợp lệ')
 
-  const proxyUrl = process.env.NEXT_PUBLIC_MANGADEX_PROXY_URL?.trim()
+  const proxyUrl = MANGADEX_PROXY_URL
   const apiResponse = await fetch(
     proxyUrl || `https://api.mangadex.org/at-home/server/${chapterId}`,
     proxyUrl

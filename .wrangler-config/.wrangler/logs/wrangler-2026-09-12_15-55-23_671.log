@@ -1,0 +1,390 @@
+
+--- 2026-09-12T15:55:23.819Z debug
+🪵  Writing logs to "D:\readora\readora\.wrangler-config\.wrangler\logs\wrangler-2026-09-12_15-55-23_671.log"
+---
+
+--- 2026-09-12T15:55:23.819Z debug
+.env file not found at "D:\readora\readora\.env". Continuing... For more details, refer to https://developers.cloudflare.com/workers/wrangler/system-environment-variables/
+---
+
+--- 2026-09-12T15:55:23.925Z log
+
+ ⛅️ wrangler 4.131.1
+────────────────────
+---
+
+--- 2026-09-12T15:55:23.959Z debug
+Metrics dispatcher: Posting data {"deviceId":"8a86a744-6265-4b4d-95ea-0c114b348f55","event":"wrangler command started","timestamp":1789228523959,"properties":{"amplitude_session_id":1789228523930,"amplitude_event_id":0,"wranglerVersion":"4.131.1","wranglerMajorVersion":4,"wranglerMinorVersion":131,"wranglerPatchVersion":1,"osPlatform":"Windows","osVersion":"Windows 11 Home Single Language","nodeVersion":24,"packageManager":"npm","isFirstUsage":false,"configFileType":"jsonc","isCI":false,"isPagesCI":false,"isWorkersCI":false,"isInteractive":true,"hasAssets":false,"agent":null,"argsUsed":["config"],"argsCombination":"config","sanitizedCommand":"deploy","sanitizedArgs":{},"currentAgentSkillsInstalled":null}}
+---
+
+--- 2026-09-12T15:55:24.010Z debug
+Retrieving cached values for account from node_modules\.cache\wrangler
+---
+
+--- 2026-09-12T15:55:24.107Z debug
+Starting verifyWorkerMatchesCITag() with tag: undefined, name: readora-mangadex-proxy
+---
+
+--- 2026-09-12T15:55:24.108Z debug
+No WRANGLER_CI_MATCH_TAG variable provided, aborting verifyWorkerMatchesCITag()
+---
+
+--- 2026-09-12T15:55:24.109Z debug
+-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/73031e9b7b727df16a35ac4aa132ba69/workers/services/readora-mangadex-proxy
+---
+
+--- 2026-09-12T15:55:24.109Z debug
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:24.110Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:24.110Z debug
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:24.110Z debug
+-- END CF API REQUEST
+---
+
+--- 2026-09-12T15:55:26.463Z debug
+-- START CF API RESPONSE: OK 200
+---
+
+--- 2026-09-12T15:55:26.464Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:26.464Z debug
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:26.464Z debug
+-- END CF API RESPONSE
+---
+
+--- 2026-09-12T15:55:26.466Z debug
+-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/73031e9b7b727df16a35ac4aa132ba69/workers/scripts/readora-mangadex-proxy/deployments
+---
+
+--- 2026-09-12T15:55:26.466Z debug
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:26.467Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:26.467Z debug
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:26.467Z debug
+-- END CF API REQUEST
+---
+
+--- 2026-09-12T15:55:28.152Z debug
+-- START CF API RESPONSE: OK 200
+---
+
+--- 2026-09-12T15:55:28.153Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:28.153Z debug
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:28.153Z debug
+-- END CF API RESPONSE
+---
+
+--- 2026-09-12T15:55:28.157Z log
+Total Upload: 3.40 KiB / gzip: 1.39 KiB
+---
+
+--- 2026-09-12T15:55:28.158Z debug
+-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/73031e9b7b727df16a35ac4aa132ba69/workers/scripts/readora-mangadex-proxy/settings
+---
+
+--- 2026-09-12T15:55:28.158Z debug
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:28.158Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:28.158Z debug
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:28.158Z debug
+-- END CF API REQUEST
+---
+
+--- 2026-09-12T15:55:30.065Z debug
+-- START CF API RESPONSE: OK 200
+---
+
+--- 2026-09-12T15:55:30.065Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:30.066Z debug
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:30.066Z debug
+-- END CF API RESPONSE
+---
+
+--- 2026-09-12T15:55:30.068Z debug
+-- START CF API REQUEST: POST https://api.cloudflare.com/client/v4/accounts/73031e9b7b727df16a35ac4aa132ba69/workers/scripts/readora-mangadex-proxy/versions
+---
+
+--- 2026-09-12T15:55:30.068Z debug
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:30.068Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:30.068Z debug
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:30.069Z debug
+BODY: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:30.069Z debug
+-- END CF API REQUEST
+---
+
+--- 2026-09-12T15:55:31.888Z debug
+-- START CF API RESPONSE: OK 200
+---
+
+--- 2026-09-12T15:55:31.888Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:31.888Z debug
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:31.888Z debug
+-- END CF API RESPONSE
+---
+
+--- 2026-09-12T15:55:31.890Z debug
+-- START CF API REQUEST: POST https://api.cloudflare.com/client/v4/accounts/73031e9b7b727df16a35ac4aa132ba69/workers/scripts/readora-mangadex-proxy/deployments
+---
+
+--- 2026-09-12T15:55:31.890Z debug
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:31.890Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:31.890Z debug
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:31.890Z debug
+-- END CF API REQUEST
+---
+
+--- 2026-09-12T15:55:33.705Z debug
+-- START CF API RESPONSE: OK 200
+---
+
+--- 2026-09-12T15:55:33.705Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:33.706Z debug
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:33.706Z debug
+-- END CF API RESPONSE
+---
+
+--- 2026-09-12T15:55:33.708Z debug
+-- START CF API REQUEST: PATCH https://api.cloudflare.com/client/v4/accounts/73031e9b7b727df16a35ac4aa132ba69/workers/scripts/readora-mangadex-proxy/script-settings
+---
+
+--- 2026-09-12T15:55:33.708Z debug
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:33.708Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:33.709Z debug
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:33.709Z debug
+-- END CF API REQUEST
+---
+
+--- 2026-09-12T15:55:35.527Z debug
+-- START CF API RESPONSE: OK 200
+---
+
+--- 2026-09-12T15:55:35.527Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:35.527Z debug
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:35.527Z debug
+-- END CF API RESPONSE
+---
+
+--- 2026-09-12T15:55:35.528Z log
+Worker Startup Time: 4 ms
+---
+
+--- 2026-09-12T15:55:35.530Z log
+Uploaded readora-mangadex-proxy (9.06 sec)
+---
+
+--- 2026-09-12T15:55:35.532Z debug
+-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/73031e9b7b727df16a35ac4aa132ba69/workers/subdomain
+---
+
+--- 2026-09-12T15:55:35.532Z debug
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:35.532Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:35.532Z debug
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:35.532Z debug
+-- END CF API REQUEST
+---
+
+--- 2026-09-12T15:55:37.467Z debug
+-- START CF API RESPONSE: OK 200
+---
+
+--- 2026-09-12T15:55:37.467Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:37.467Z debug
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:37.467Z debug
+-- END CF API RESPONSE
+---
+
+--- 2026-09-12T15:55:37.468Z debug
+-- START CF API REQUEST: GET https://api.cloudflare.com/client/v4/accounts/73031e9b7b727df16a35ac4aa132ba69/workers/scripts/readora-mangadex-proxy/subdomain
+---
+
+--- 2026-09-12T15:55:37.468Z debug
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:37.468Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:37.468Z debug
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:37.468Z debug
+-- END CF API REQUEST
+---
+
+--- 2026-09-12T15:55:39.119Z debug
+-- START CF API RESPONSE: OK 200
+---
+
+--- 2026-09-12T15:55:39.119Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:39.119Z debug
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:39.119Z debug
+-- END CF API RESPONSE
+---
+
+--- 2026-09-12T15:55:39.122Z debug
+-- START CF API REQUEST: POST https://api.cloudflare.com/client/v4/accounts/73031e9b7b727df16a35ac4aa132ba69/workers/scripts/readora-mangadex-proxy/subdomain
+---
+
+--- 2026-09-12T15:55:39.123Z debug
+QUERY STRING: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:39.123Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:39.123Z debug
+INIT: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:39.124Z debug
+-- END CF API REQUEST
+---
+
+--- 2026-09-12T15:55:40.748Z debug
+-- START CF API RESPONSE: OK 200
+---
+
+--- 2026-09-12T15:55:40.749Z debug
+HEADERS: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:40.749Z debug
+RESPONSE: omitted; set WRANGLER_LOG_SANITIZE=false to include sanitized data
+---
+
+--- 2026-09-12T15:55:40.749Z debug
+-- END CF API RESPONSE
+---
+
+--- 2026-09-12T15:55:40.750Z log
+Deployed readora-mangadex-proxy triggers (5.22 sec)
+---
+
+--- 2026-09-12T15:55:40.751Z log
+  https://readora-mangadex-proxy.tranthanhnguyenviet.workers.dev
+---
+
+--- 2026-09-12T15:55:40.751Z log
+Current Version ID: 170b69b2-b771-4491-a7b6-709bdea121d2
+---
+
+--- 2026-09-12T15:55:40.753Z debug
+Metrics dispatcher: Posting data {"deviceId":"8a86a744-6265-4b4d-95ea-0c114b348f55","event":"deploy worker script","timestamp":1789228540753,"properties":{"amplitude_session_id":1789228540752,"amplitude_event_id":0,"wranglerVersion":"4.131.1","wranglerMajorVersion":4,"wranglerMinorVersion":131,"wranglerPatchVersion":1,"osPlatform":"Windows","osVersion":"Windows 11 Home Single Language","nodeVersion":24,"packageManager":"npm","isFirstUsage":false,"configFileType":"none","isCI":false,"isPagesCI":false,"isWorkersCI":false,"isInteractive":true,"hasAssets":false,"agent":null,"category":"Workers","os":"win32:x64","usesTypeScript":true,"durationMs":16741,"currentAgentSkillsInstalled":null}}
+---
+
+--- 2026-09-12T15:55:40.757Z debug
+Metrics dispatcher: Posting data {"deviceId":"8a86a744-6265-4b4d-95ea-0c114b348f55","event":"wrangler command completed","timestamp":1789228540757,"properties":{"amplitude_session_id":1789228523930,"amplitude_event_id":1,"wranglerVersion":"4.131.1","wranglerMajorVersion":4,"wranglerMinorVersion":131,"wranglerPatchVersion":1,"osPlatform":"Windows","osVersion":"Windows 11 Home Single Language","nodeVersion":24,"packageManager":"npm","isFirstUsage":false,"configFileType":"jsonc","isCI":false,"isPagesCI":false,"isWorkersCI":false,"isInteractive":true,"hasAssets":false,"agent":null,"argsUsed":["config"],"argsCombination":"config","sanitizedCommand":"deploy","sanitizedArgs":{},"durationMs":16931,"currentAgentSkillsInstalled":null}}
+---

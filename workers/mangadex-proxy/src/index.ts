@@ -71,6 +71,6 @@ export default {
     const images = pages.map((page) =>
       `${proxyOrigin}/image?url=${encodeURIComponent(`${baseUrl}/data/${hash}/${page}`)}`,
     );
-    return json({ success: true, images, total: images.length });
+    return json({ success: true, images, total: images.length }, request);
   },
 };
