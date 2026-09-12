@@ -1,0 +1,6 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "readora-mangadex-proxy",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-12"
+}
