@@ -35,6 +35,7 @@ import type {
 } from "@/components/types";
 import { translateFromBrowser } from "@/components/clientGoogleTranslate";
 import { translateWithChromeBuiltIn } from "@/components/clientChromeTranslator";
+import { translateWithHachimi } from "@/components/clientHachimiTranslate";
 import { LensCore } from '@rxliuli/chrome-lens-ocr/core';
 
 const STORAGE_KEY = "manga-translations-v1";
@@ -321,6 +322,23 @@ export default function useMangaTranslator() {
     source?: string,
     onChunk?: (translatedText: string, index: number, total: number, sourceText?: string) => void,
   ) => {
+    const sourceCode = source || "auto";
+    const canUseHachimi =
+      (sourceCode === "auto" || sourceCode === "zh" || sourceCode === "zh-CN" || sourceCode === "chi_sim") &&
+      (target === "vi" || target === "vie");
+
+    const tryHachimiFallback = async () => {
+      if (!canUseHachimi) return null;
+      try {
+        const translated = await translateWithHachimi(text);
+        onChunk?.(translated, 0, 1, text);
+        return translated;
+      } catch (error) {
+        console.info("HachimiMT unavailable; keeping server error:", error);
+        return null;
+      }
+    };
+
     try {
       const sourceMap: Record<string, string> = {
         eng: "en",
@@ -396,6 +414,8 @@ export default function useMangaTranslator() {
         } catch {
           // Giữ message mặc định nếu response lỗi không phải JSON.
         }
+        const hachimiTranslated = await tryHachimiFallback();
+        if (hachimiTranslated) return hachimiTranslated;
         throw new Error(message);
       }
 
@@ -465,6 +485,8 @@ export default function useMangaTranslator() {
         console.error(error);
       }
 
+      const hachimiTranslated = await tryHachimiFallback();
+      if (hachimiTranslated) return hachimiTranslated;
       throw error;
     }
   };

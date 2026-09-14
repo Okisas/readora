@@ -5,6 +5,57 @@ import { launchBrowser } from "@/lib/launchBrowser";
 export const maxDuration = 300;
 
 const fetchMangaDexChapterImages = async (chapterUrl: string) => {
+  const chapterId = new URL(chapterUrl).pathname.match(
+    /\/chapter\/([0-9a-f-]{36})(?:\/|$)/i,
+  )?.[1];
+  if (!chapterId) throw new Error("Không tìm thấy mã chapter MangaDex");
+
+  // Ưu tiên HTTP fetch trực tiếp: nhẹ hơn Puppeteer và tránh lỗi đóng kết nối
+  // HTTP/2 của Chromium khi MangaDex thay đổi cách phục vụ endpoint.
+  try {
+    const apiResponse = await fetch(
+      `https://api.mangadex.org/at-home/server/${chapterId}`,
+      {
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "Readora/1.0 (+https://readora.ddns.net)",
+        },
+        cache: "no-store",
+        signal: AbortSignal.timeout(30_000),
+      },
+    );
+    if (!apiResponse.ok) throw new Error(`MangaDex API lỗi (${apiResponse.status})`);
+    const data = await apiResponse.json() as {
+      baseUrl?: string;
+      chapter?: { hash?: string; data?: string[] };
+    };
+    const baseUrl = data.baseUrl;
+    const hash = data.chapter?.hash;
+    const pages = data.chapter?.data;
+    if (!baseUrl || !hash || !pages?.length) throw new Error("MangaDex không trả về danh sách trang");
+
+    const images: string[] = [];
+    for (const pageName of pages) {
+      const imageResponse = await fetch(
+        `${baseUrl}/data/${hash}/${encodeURIComponent(pageName)}`,
+        {
+          headers: { Accept: "image/avif,image/webp,image/*", Referer: "https://mangadex.org/" },
+          cache: "no-store",
+          signal: AbortSignal.timeout(30_000),
+        },
+      );
+      if (!imageResponse.ok) continue;
+      const contentType = imageResponse.headers.get("content-type") || "image/jpeg";
+      if (!contentType.startsWith("image/")) continue;
+      const buffer = Buffer.from(await imageResponse.arrayBuffer());
+      images.push(`data:${contentType};base64,${buffer.toString("base64")}`);
+    }
+    if (images.length) return images;
+    throw new Error("MangaDex không trả về ảnh");
+  } catch (error) {
+    console.warn("MangaDex HTTP fetch failed; dùng Puppeteer fallback:", error);
+  }
+
   const browser = await launchBrowser();
 
   try {
